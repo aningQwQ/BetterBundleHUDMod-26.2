@@ -243,7 +243,7 @@ public final class BundlePanelRenderer {
         int panelHeight = Math.min(imageHeight, searchH + gridH) + 24;
 
         // Panel background (left edge inset 16px)
-        graphics.fill(panelX + 16, panelY, panelX + pw, panelY + panelHeight, 0xC0101010);
+        graphics.fill(panelX + 16, panelY, panelX + pw, panelY + panelHeight, 0x25101010);
 
         Minecraft client = Minecraft.getInstance();
         Font font = client.font;
@@ -273,7 +273,7 @@ public final class BundlePanelRenderer {
             if (selected) { bx -= 5; bw += 5; }
             boolean hovered = mouseX >= bx && mouseX < bx + bw
                     && mouseY >= by && mouseY < by + CAT_BAR_WIDTH;
-            int bg = selected ? 0xC0101010 : (hovered ? 0xFF555555 : 0xFF2D2D2D);
+            int bg = selected ? 0x25101010 : (hovered ? 0x40FFFFFF : 0x30FFFFFF);
             graphics.fill(bx, by, bx + bw, by + CAT_BAR_WIDTH, bg);
             int iconOff = (CAT_BAR_WIDTH - 16) / 2;
             graphics.item(cats[i].getIcon(), bx + iconOff, by + iconOff);
@@ -284,11 +284,11 @@ public final class BundlePanelRenderer {
         int sbY = gridTop + PADDING;
         int sbH = gridContentH - PADDING * 2;
 
-        graphics.fill(sbX, sbY, sbX + SCROLL_BAR_WIDTH, sbY + sbH, 0xFF2D2D2D);
+        graphics.fill(sbX, sbY, sbX + SCROLL_BAR_WIDTH, sbY + sbH, 0x30FFFFFF);
         if (maxScroll > 0) {
             int thumbH = Math.max(12, sbH * VISIBLE_ROWS / totalRows);
             int thumbY = sbY + (sbH - thumbH) * scrollOffset / maxScroll;
-            graphics.fill(sbX, thumbY, sbX + SCROLL_BAR_WIDTH, thumbY + thumbH, 0xFF888888);
+            graphics.fill(sbX, thumbY, sbX + SCROLL_BAR_WIDTH, thumbY + thumbH, 0x50FFFFFF);
         }
 
         // Item grid
@@ -304,8 +304,8 @@ public final class BundlePanelRenderer {
                 int sx = gridX + col * (SLOT_SIZE + SLOT_SPACING);
                 int sy = gridY + row * (SLOT_SIZE + SLOT_SPACING);
 
-                graphics.fill(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0xFF373737);
-                graphics.fill(sx + 1, sy + 1, sx + SLOT_SIZE - 1, sy + SLOT_SIZE - 1, 0xFFC6C6C6);
+                graphics.fill(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0x40FFFFFF);
+                graphics.fill(sx + 1, sy + 1, sx + SLOT_SIZE - 1, sy + SLOT_SIZE - 1, 0x50FFFFFF);
 
                 FlatItem fi = items.get(flatIndex);
                 graphics.item(fi.stack(), sx + 1, sy + 1);
@@ -322,7 +322,7 @@ public final class BundlePanelRenderer {
             int hCol = hoveredFlatIndex % COLUMNS;
             int hx = gridX + hCol * (SLOT_SIZE + SLOT_SPACING);
             int hy = gridY + hRow * (SLOT_SIZE + SLOT_SPACING);
-            graphics.fill(hx, hy, hx + SLOT_SIZE, hy + SLOT_SIZE, 0x80FFFFFF);
+            graphics.fill(hx, hy, hx + SLOT_SIZE, hy + SLOT_SIZE, 0x60FFFFFF);
             graphics.setTooltipForNextFrame(font, items.get(hoveredFlatIndex).stack(), mouseX, mouseY);
             hoveredBundleSlot = items.get(hoveredFlatIndex).bundleSlot();
         } else {
@@ -335,9 +335,9 @@ public final class BundlePanelRenderer {
             int sby = panelY + 2;
             int sbw = pw - PADDING - CAT_BAR_WIDTH - 2 - PADDING - 10;
             boolean active = isAllMode && searchFocused;
-            int bg = isAllMode ? (active ? 0xFF000000 : 0xFF2D2D2D) : 0xFF1A1A1A;
+            int bg = isAllMode ? (active ? 0x60000000 : 0x40FFFFFF) : 0x30FFFFFF;
             graphics.fill(sbx, sby, sbx + sbw, sby + SEARCH_BAR_HEIGHT, bg);
-            if (active) graphics.fill(sbx + 1, sby + 1, sbx + sbw - 1, sby + SEARCH_BAR_HEIGHT - 1, 0xFF3D3D3D);
+            if (active) graphics.fill(sbx + 1, sby + 1, sbx + sbw - 1, sby + SEARCH_BAR_HEIGHT - 1, 0x50FFFFFF);
             int textY = sby + (SEARCH_BAR_HEIGHT - font.lineHeight) / 2;
             if (isAllMode && searchQuery.isEmpty() && !searchFocused) {
                 graphics.text(font, "Search...", sbx + 3, textY, 0xFF666666, false);
@@ -354,7 +354,9 @@ public final class BundlePanelRenderer {
         // Category title (on top of search bar)
         if (currentCategory != BundleCategory.ALL) {
             String label = currentCategory.getDisplayName();
-            graphics.text(font, label, panelX + 16 + 3, panelY + 2, 0xFFCCCCCC, false);
+            int catTextX = panelX + PADDING + CAT_BAR_WIDTH + 2 + 3;
+            int catTextY = panelY + 2 + (SEARCH_BAR_HEIGHT - font.lineHeight) / 2;
+            graphics.text(font, label, catTextX, catTextY, 0xFFCCCCCC, false);
         }
 
         // Bundle count display (bottom-right of grid)
@@ -363,7 +365,7 @@ public final class BundlePanelRenderer {
         int textW = font.width(countText);
         int countX = gridX + COLUMNS * (SLOT_SIZE + SLOT_SPACING) - SLOT_SPACING - textW;
         int countY = gridY + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING + 7;
-        graphics.fill(countX - 2, countY, countX + textW + 2, countY + font.lineHeight, 0xC0101010);
+        graphics.fill(countX - 2, countY, countX + textW + 2, countY + font.lineHeight, 0x30FFFFFF);
         graphics.text(font, countText, countX, countY, 0xFFAAAAAA, false);
 
     }
