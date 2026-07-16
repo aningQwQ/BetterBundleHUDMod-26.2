@@ -172,7 +172,10 @@ public enum BundleCategory {
             "minecraft:white_glazed_terracotta", "minecraft:white_stained_glass",
             "minecraft:white_terracotta", "minecraft:white_wool", "minecraft:yellow_concrete",
             "minecraft:yellow_concrete_powder", "minecraft:yellow_glazed_terracotta",
-            "minecraft:yellow_stained_glass", "minecraft:yellow_terracotta", "minecraft:yellow_wool"
+            "minecraft:yellow_stained_glass", "minecraft:yellow_terracotta", "minecraft:yellow_wool",
+            "minecraft:cinnabar", "minecraft:cinnabar_bricks", "minecraft:chiseled_cinnabar",
+            "minecraft:polished_cinnabar", "minecraft:sulfur", "minecraft:sulfur_bricks",
+            "minecraft:chiseled_sulfur", "minecraft:polished_sulfur"
         ));
         NON_FULL_BLOCKS.setItemIds(Set.of(
             "minecraft:acacia_button", "minecraft:acacia_door", "minecraft:acacia_fence",
@@ -344,7 +347,11 @@ public enum BundleCategory {
             "minecraft:white_candle", "minecraft:white_carpet", "minecraft:white_stained_glass_pane",
             "minecraft:wither_skeleton_skull", "minecraft:yellow_banner", "minecraft:yellow_bed",
             "minecraft:yellow_candle", "minecraft:yellow_carpet", "minecraft:yellow_stained_glass_pane",
-            "minecraft:zombie_head"
+            "minecraft:zombie_head", "minecraft:cinnabar_slab", "minecraft:cinnabar_stairs",
+            "minecraft:cinnabar_wall", "minecraft:polished_cinnabar_slab", "minecraft:polished_cinnabar_stairs",
+            "minecraft:polished_cinnabar_wall", "minecraft:sulfur_slab", "minecraft:sulfur_stairs",
+            "minecraft:sulfur_wall", "minecraft:polished_sulfur_slab", "minecraft:polished_sulfur_stairs",
+            "minecraft:polished_sulfur_wall"
         ));
         PLANTS.setItemIds(Set.of(
             "minecraft:acacia_leaves", "minecraft:acacia_sapling", "minecraft:allium", "minecraft:azalea",
@@ -488,7 +495,7 @@ public enum BundleCategory {
             "minecraft:iron_ingot", "minecraft:lapis_block", "minecraft:lapis_lazuli",
             "minecraft:netherite_block", "minecraft:netherite_ingot", "minecraft:netherite_scrap",
             "minecraft:raw_copper", "minecraft:raw_gold", "minecraft:raw_iron",
-            "minecraft:redstone_block"
+            "minecraft:redstone_block", "minecraft:sulfur", "minecraft:cinnabar"
         ));
     }
 }
