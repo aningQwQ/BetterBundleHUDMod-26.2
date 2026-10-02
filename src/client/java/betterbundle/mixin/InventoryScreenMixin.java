@@ -1,6 +1,8 @@
 package betterbundle.mixin;
 
 import betterbundle.gui.BundlePanelRenderer;
+import betterbundle.gui.SortButton;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.Slot;
@@ -42,6 +44,11 @@ public abstract class InventoryScreenMixin {
         }
 
         renderToggleButton(graphics, self.leftPos + self.imageWidth, self.topPos + 5, mouseX, mouseY);
+
+        if (BundlePanelRenderer.isEffectivelyVisible()) {
+            SortButton.render(graphics, Minecraft.getInstance().font,
+                    self.leftPos, self.topPos, self.imageHeight, mouseX, mouseY);
+        }
     }
 
     private static void renderToggleButton(GuiGraphicsExtractor graphics, int x, int y, int mouseX, int mouseY) {

@@ -12,6 +12,8 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import betterbundle.util.BundleContentsHelper;
@@ -129,14 +131,8 @@ public final class BundlePanelInteraction {
         if (stack.isEmpty() || BundleContentsHelper.isNonEmptyBundle(stack)) return false;
 
         List<BundlePanelRenderer.BundleSlotEntry> bundles = BundlePanelRenderer.getAllBundles();
-        int targetBundleSlot = -1;
-        for (BundlePanelRenderer.BundleSlotEntry entry : bundles) {
-            if (BundleContentsHelper.canFitItem(entry.bundleStack(), stack)) {
-                targetBundleSlot = entry.bundleSlot();
-                break;
-            }
-        }
-        if (targetBundleSlot < 0) return false;
+        List<Integer> targets = buildInsertTargets(bundles, stack, hoveredSlot.index);
+        if (targets.isEmpty()) return false;
 
         ClientPacketListener connection = client.getConnection();
         if (connection == null) return false;
@@ -144,10 +140,50 @@ public final class BundlePanelInteraction {
         int containerId = player.containerMenu.containerId;
         int itemSlot = hoveredSlot.index;
 
+        // 拿起整叠 → 依次放入多个袋子（每个尽量填充，余量留在光标）→ 余量放回原槽。
         connection.send(makeClickPacket(containerId, itemSlot, (byte) 0));
-        connection.send(makeClickPacket(containerId, targetBundleSlot, (byte) 0));
+        for (int target : targets) {
+            connection.send(makeClickPacket(containerId, target, (byte) 0));
+        }
+        connection.send(makeClickPacket(containerId, itemSlot, (byte) 0));
 
         return true;
+    }
+
+    /**
+     * 计算把 stack 放入哪些袋子（类似 XFS 聚堆预分配）：
+     * <ol>
+     *   <li>优先已有同种物品的袋子（同种越多越靠前）；</li>
+     *   <li>没有同种时，选当前能容纳最多的袋子（“找最大的一个”），尽量把整叠聚到一处；</li>
+     *   <li>依次累计容量，凑够整叠就停，装不下的部分才继续找下一个袋子。</li>
+     * </ol>
+     * 返回目标袋子槽位（按放入顺序）。
+     */
+    private static List<Integer> buildInsertTargets(
+            List<BundlePanelRenderer.BundleSlotEntry> bundles, ItemStack stack, int excludeSlot) {
+        List<BundlePanelRenderer.BundleSlotEntry> cands = new ArrayList<>();
+        for (BundlePanelRenderer.BundleSlotEntry entry : bundles) {
+            if (entry.bundleSlot() == excludeSlot) continue;
+            if (BundleContentsHelper.maxAcceptable(entry.bundleStack(), stack) > 0) {
+                cands.add(entry);
+            }
+        }
+        cands.sort(Comparator
+                .comparingInt((BundlePanelRenderer.BundleSlotEntry e) ->
+                        BundleContentsHelper.sameItemCount(e.bundleStack(), stack) > 0 ? 0 : 1)
+                .thenComparingInt(e -> -BundleContentsHelper.sameItemCount(e.bundleStack(), stack))
+                .thenComparingInt(e -> -BundleContentsHelper.maxAcceptable(e.bundleStack(), stack)));
+
+        List<Integer> targets = new ArrayList<>();
+        int remaining = stack.getCount();
+        for (BundlePanelRenderer.BundleSlotEntry entry : cands) {
+            int cap = BundleContentsHelper.maxAcceptable(entry.bundleStack(), stack);
+            if (cap <= 0) continue;
+            targets.add(entry.bundleSlot());
+            remaining -= Math.min(cap, remaining);
+            if (remaining <= 0) break;
+        }
+        return targets;
     }
 
     private static ServerboundContainerClickPacket makeClickPacket(int containerId, int slot, byte button) {
@@ -189,8 +225,8 @@ public final class BundlePanelInteraction {
         bulkInsertStart = 0;
     }
 
-    /** Put cursor item into any available bundle.
-     *  button 0 = left (insert all), 1 = right (insert one). */
+    /** Put cursor item into available bundles, distributing across several if needed.
+     *  单袋放不下时自动拆到多个袋子（优先聚堆）。 */
     public static boolean handlePanelInsert(int button) {
         Minecraft client = Minecraft.getInstance();
         Player player = client.player;
@@ -200,19 +236,17 @@ public final class BundlePanelInteraction {
         if (cursor.isEmpty()) return false;
 
         List<BundlePanelRenderer.BundleSlotEntry> bundles = BundlePanelRenderer.getAllBundles();
-        int targetBundleSlot = -1;
-        for (BundlePanelRenderer.BundleSlotEntry entry : bundles) {
-            if (BundleContentsHelper.canFitItem(entry.bundleStack(), cursor)) {
-                targetBundleSlot = entry.bundleSlot();
-                break;
-            }
-        }
-        if (targetBundleSlot < 0) return false;
+        List<Integer> targets = buildInsertTargets(bundles, cursor, -1);
+        if (targets.isEmpty()) return false;
 
         ClientPacketListener connection = client.getConnection();
         if (connection == null) return false;
         int containerId = player.containerMenu.containerId;
-        connection.send(makeClickPacket(containerId, targetBundleSlot, (byte) button));
+
+        // 光标已有整叠，直接依次放入多个袋子；每个尽量填充，余量留在光标上。
+        for (int target : targets) {
+            connection.send(makeClickPacket(containerId, target, (byte) 0));
+        }
         return true;
     }
 

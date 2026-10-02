@@ -3,6 +3,8 @@ package betterbundle.mixin;
 import betterbundle.gui.BundleCategory;
 import betterbundle.gui.BundlePanelInteraction;
 import betterbundle.gui.BundlePanelRenderer;
+import betterbundle.gui.SortButton;
+import betterbundle.sort.exec.SortStateMachine;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.input.CharacterEvent;
@@ -21,6 +23,14 @@ public abstract class AbstractRecipeBookScreenMixin {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         double mouseX = event.x();
         double mouseY = event.y();
+
+        // 一键整理按钮（面板可见时优先；运行中点击即取消）
+        if (BundlePanelRenderer.isEffectivelyVisible()
+                && SortButton.handleClick(self.leftPos, self.topPos, self.imageHeight, mouseX, mouseY)) {
+            cir.setReturnValue(true);
+            return;
+        }
+        SortStateMachine.get().abortByUser();
 
         // Toggle button
         int bx = self.leftPos + self.imageWidth;
@@ -64,6 +74,7 @@ public abstract class AbstractRecipeBookScreenMixin {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+        SortStateMachine.get().abortByUser();
         if (BundlePanelRenderer.searchFocused) {
             BundlePanelRenderer.onSearchKeyPress(event.key());
             cir.setReturnValue(true);

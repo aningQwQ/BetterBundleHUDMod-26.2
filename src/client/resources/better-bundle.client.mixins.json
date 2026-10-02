@@ -5,7 +5,7 @@
     "client": [
         "InventoryScreenMixin",
         "AbstractContainerScreenMixin",
-        "AbstractRecipeBookScreenMixin",
+        "AbstractRecipeBookScreenMixin"
     ],
     "injectors": {
         "defaultRequire": 1

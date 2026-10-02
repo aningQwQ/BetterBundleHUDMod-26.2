@@ -3,6 +3,8 @@ package betterbundle.mixin;
 import betterbundle.gui.BundleCategory;
 import betterbundle.gui.BundlePanelInteraction;
 import betterbundle.gui.BundlePanelRenderer;
+import betterbundle.gui.SortButton;
+import betterbundle.sort.exec.SortStateMachine;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
@@ -22,6 +24,17 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+
+        // 一键整理按钮（面板可见时优先；运行中点击即取消）
+        if (BundlePanelRenderer.isEffectivelyVisible()
+                && SortButton.handleClick(self.leftPos, self.topPos, self.imageHeight,
+                        event.x(), event.y())) {
+            cir.setReturnValue(true);
+            return;
+        }
+
+        // 玩家任意输入 → 立即中止整理（不回滚，D4）
+        SortStateMachine.get().abortByUser();
 
         // Bulk-insert: space+left anywhere starts the timer (0.05s to activate)
         if (event.button() == 0 && isSpaceDown()) {
@@ -116,6 +129,7 @@ public abstract class AbstractContainerScreenMixin {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+        SortStateMachine.get().abortByUser();
         if (BundlePanelRenderer.searchFocused) {
             BundlePanelRenderer.onSearchKeyPress(event.key());
             cir.setReturnValue(true);
@@ -127,6 +141,7 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "mouseDragged", at = @At("HEAD"), cancellable = true)
     private void onMouseDragged(MouseButtonEvent event, double dx, double dy,
                                  CallbackInfoReturnable<Boolean> cir) {
+        SortStateMachine.get().abortByUser();
         if (!BundlePanelInteraction.isBulkInsertActive()) return;
         if (!isSpaceDown()) { BundlePanelInteraction.stopBulkInsert(); return; }
 
@@ -142,6 +157,7 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
     private void onMouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY,
                                   CallbackInfoReturnable<Boolean> cir) {
+        SortStateMachine.get().abortByUser();
         if (!BundlePanelRenderer.isEffectivelyVisible()) return;
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         if (BundlePanelInteraction.isInsidePanel(mouseX, mouseY,
