@@ -160,17 +160,21 @@ public final class BundlePacker {
             Diff diff = computeDiff(vm, target);
             if (diff.out.isEmpty() && diff.in.isEmpty()) return;
 
-            // 直接：把源袋的整叠搬进有空间的接收袋（顶满）。
+            // 直接：把源袋的整叠搬进有空间的接收袋（顶满）。遍历所有可接收袋，确保至少能放下 1 个。
             boolean moved = false;
             for (Map.Entry<BagModel, Map<ItemKey, Integer>> so : diff.out.entrySet()) {
                 BagModel src = so.getKey();
                 for (ItemKey key : so.getValue().keySet()) {
-                    BagModel dst = findReceiver(diff, key);
-                    if (dst == null || dst.freeWeight() <= 0) continue;
-                    if (emitFill(src, key, dst, vm, perByKey, moves)) {
-                        moved = true;
-                        break;
+                    int per = Math.max(1, perByKey.getOrDefault(key, 1));
+                    for (BagModel dst : diff.in.keySet()) {
+                        if (diff.in.get(dst).getOrDefault(key, 0) <= 0) continue;
+                        if (dst.freeWeight() < per) continue;
+                        if (emitFill(src, key, dst, vm, perByKey, moves)) {
+                            moved = true;
+                            break;
+                        }
                     }
+                    if (moved) break;
                 }
                 if (moved) break;
             }
@@ -204,11 +208,12 @@ public final class BundlePacker {
                              List<PlannedMove> moves) {
         BagEntry se = src.findEntry(key);
         if (se == null || se.count <= 0) return false;
-        moves.add(new PlannedMove(nextId++,
-                MoveAction.to(src.invSlot, key, se.count, dst.invSlot)));
         int per = Math.max(1, perByKey.getOrDefault(key, 1));
         int take = Math.min(se.count, dst.freeWeight() / per);
-        if (take > 0) applyExtract(src, key, take, dst);
+        if (take <= 0) return false;   // 目标放不下哪怕 1 个 -> 不生成空动作
+        moves.add(new PlannedMove(nextId++,
+                MoveAction.to(src.invSlot, key, se.count, dst.invSlot)));
+        applyExtract(src, key, take, dst);
         return true;
     }
 
