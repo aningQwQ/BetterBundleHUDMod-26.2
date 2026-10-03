@@ -6,7 +6,7 @@
     "description": "Adds a side panel to the inventory for quick bundle access",
     "authors": [],
     "contact": {},
-    "license": "MIT",
+    "license": "GPL-3.0-only",
     "environment": "client",
     "entrypoints": {
         "client": [
