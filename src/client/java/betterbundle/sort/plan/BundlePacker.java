@@ -126,21 +126,23 @@ public final class BundlePacker {
         Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
         for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
 
+        // Worst-Fit：把 chunk 放进“当前剩余空间最大”的袋子，使各袋水位尽量均衡；
+        // 平手时优先放回已有该物品的袋子（同类聚拢、减少搬运）。
         for (Chunk chunk : chunks) {
             BagModel best = null;
+            int bestRemaining = -1;
             int bestCur = -1;
-            int bestCap = Integer.MAX_VALUE;
             for (BagModel b : bags) {
                 int c = cap.get(b);
                 if (c < chunk.weight) continue;
                 int cur = currentCount(b, chunk.key);
-                if (cur > bestCur || (cur == bestCur && c < bestCap)) {
+                if (c > bestRemaining || (c == bestRemaining && cur > bestCur)) {
                     best = b;
+                    bestRemaining = c;
                     bestCur = cur;
-                    bestCap = c;
                 }
             }
-            if (best == null) continue; // 装不下（理论上不会发生）
+            if (best == null) continue; // 装不下（容量不足，保持原位）
             cap.put(best, cap.get(best) - chunk.weight);
             target.get(best).merge(chunk.key, chunk.count, Integer::sum);
         }
