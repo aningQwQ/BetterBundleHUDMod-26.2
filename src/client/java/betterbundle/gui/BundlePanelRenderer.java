@@ -372,19 +372,17 @@ public final class BundlePanelRenderer {
 
     private static int[] getBundleStats() {
         List<BundleSlotEntry> all = getAllBundles();
-        int totalItems = 0;
-        Fraction totalWeight = Fraction.ZERO;
+        // 已用 / 总量：以 1/64 为单位表示重量。
+        // 总量 = 袋子数 × 64，只随“袋子数量”变化，不随放入物品的类型变化。
+        int capacity = all.size() * 64;
+        int used = 0;
         for (BundleSlotEntry entry : all) {
             BundleContents c = entry.contents();
             if (c != null && !c.isEmpty()) {
-                totalItems += c.itemCopyStream().mapToInt(ItemStack::getCount).sum();
-                totalWeight = totalWeight.add(c.weight().result().orElse(Fraction.ZERO));
+                Fraction w = c.weight().result().orElse(Fraction.ZERO);
+                used += w.multiplyBy(Fraction.getFraction(64, 1)).intValue();
             }
         }
-        // remaining weight → how many more "standard" items (weight 1/64) would fit
-        Fraction maxWeight = Fraction.getFraction(all.size(), 1);
-        Fraction remaining = maxWeight.subtract(totalWeight);
-        int effectiveMax = totalItems + remaining.multiplyBy(Fraction.getFraction(64, 1)).intValue();
-        return new int[] { totalItems, effectiveMax };
+        return new int[] { used, capacity };
     }
 }

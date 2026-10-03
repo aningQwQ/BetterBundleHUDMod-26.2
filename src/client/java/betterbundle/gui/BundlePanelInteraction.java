@@ -84,22 +84,24 @@ public final class BundlePanelInteraction {
 
         if (shiftDown) {
             boolean inContainer = !(screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen);
-            int emptySlot;
+            int destSlot;
             if (button == 0 && inContainer) {
-                emptySlot = findEmptyContainerSlot(player) >= 0
-                        ? findEmptyContainerSlot(player) : findEmptyPlayerSlot(player);
+                destSlot = findEmptyContainerSlot(player);
+                if (destSlot < 0) destSlot = findEmptyPlayerSlot(player);
             } else {
-                emptySlot = findEmptyPlayerSlot(player);
+                destSlot = findEmptyPlayerSlot(player);
             }
-            if (emptySlot < 0) return true;
+            if (destSlot < 0) return true;
 
-            int count = clicked.stack().getCount();
-            for (int i = 0; i < count; i++) {
-                connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
-                connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
-            }
-            connection.send(makeClickPacket(containerId, emptySlot, (byte) 0));
+            // removeOne 取出的是「整个选中条目」：只需一次选中 + 右键，再放入目标槽。
+            // 绝不能循环右键（光标非空后右键会走原版逻辑，把袋子本身拿起来）。
+            connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
+            connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
+            connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
+            connection.send(makeClickPacket(containerId, destSlot, (byte) 0));
         } else {
+            // 选中是 toggle 语义：先 -1 再设索引，保证确定选中。
+            connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
             connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
         }
