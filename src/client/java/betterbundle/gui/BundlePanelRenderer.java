@@ -224,11 +224,7 @@ public final class BundlePanelRenderer {
     public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
         if (!isEffectivelyVisible()) return;
         List<BundleSlotEntry> bundles = getBundles();
-        if (bundles.isEmpty()) { scrollOffset = 0; return; }
-
         List<FlatItem> allItems = buildFlatItemList(bundles);
-        if (allItems.isEmpty()) { scrollOffset = 0; return; }
-
         List<FlatItem> items = filterItems(allItems, searchQuery);
         if (items.isEmpty()) scrollOffset = 0;
 
