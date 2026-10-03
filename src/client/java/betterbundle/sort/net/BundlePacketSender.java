@@ -28,7 +28,7 @@ public final class BundlePacketSender {
 
     private BundlePacketSender() {}
 
-    /** 一次逻辑移动：选中源条目 → 右键取出整叠到光标 → 左键放入目标袋。 */
+    /** 一次逻辑移动：选中源条目 → 右键取出整叠到光标 → 依次放入各目标袋 → 余量放回源袋。 */
     public static boolean sendMove(MoveAction action) {
         try {
             Minecraft client = Minecraft.getInstance();
@@ -39,7 +39,6 @@ public final class BundlePacketSender {
 
             int slots = player.containerMenu.slots.size();
             if (action.srcBagSlot() < 0 || action.srcBagSlot() >= slots) return false;
-            if (action.dstBagSlot() < 0 || action.dstBagSlot() >= slots) return false;
 
             Slot srcSlot = player.containerMenu.getSlot(action.srcBagSlot());
             if (srcSlot == null || !srcSlot.hasItem()) return false;
@@ -49,11 +48,39 @@ public final class BundlePacketSender {
 
             int containerId = player.containerMenu.containerId;
 
+            // 读出该条目的整叠数量，用于判断放入后是否会留下余量。
+            BundleContents contents = srcSlot.getItem().get(DataComponents.BUNDLE_CONTENTS);
+            if (contents == null) return false;
+            List<ItemStack> items = contents.itemCopyStream().toList();
+            if (index >= items.size()) return false;
+            ItemStack item = items.get(index);
+            int entryCount = item.getCount();
+            int totalCap = 0;
+            for (int dst : action.dstBagSlots()) {
+                if (dst < 0 || dst >= slots || dst == action.srcBagSlot()) continue;
+                totalCap += betterbundle.util.BundleContentsHelper.maxAcceptable(
+                        player.containerMenu.getSlot(dst).getItem(), item);
+            }
+            boolean leavesRemainder = totalCap < entryCount;
+
             // 选中是 toggle 语义：先 -1 清空，再设目标索引，确定选中。
             connection.send(new ServerboundSelectBundleItemPacket(action.srcBagSlot(), -1));
             connection.send(new ServerboundSelectBundleItemPacket(action.srcBagSlot(), index));
+
+            // 一次取出整叠到光标。
             connection.send(click(containerId, action.srcBagSlot(), (byte) 1));
-            connection.send(click(containerId, action.dstBagSlot(), (byte) 0));
+
+            // 依次放入各目标袋：每个 tryInsert 能塞多少塞多少，余量留在光标带到下一个。
+            for (int dst : action.dstBagSlots()) {
+                if (dst < 0 || dst >= slots || dst == action.srcBagSlot()) continue;
+                connection.send(click(containerId, dst, (byte) 0));
+            }
+
+            // 只有确实会留下余量时，才把余量点回源袋。
+            // 若光标为空时点 bundle 槽，会走原版逻辑把袋子本身拿起来，因此绝不能无条件点。
+            if (leavesRemainder) {
+                connection.send(click(containerId, action.srcBagSlot(), (byte) 0));
+            }
             return true;
         } catch (Throwable t) {
             return false;

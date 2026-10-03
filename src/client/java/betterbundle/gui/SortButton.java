@@ -3,7 +3,7 @@ package betterbundle.gui;
 import betterbundle.sort.exec.SortStateMachine;
 import betterbundle.sort.model.BundleSnapshotBuilder;
 import betterbundle.sort.model.InventoryModel;
-import betterbundle.sort.plan.ConstrainedTbfdPlanner;
+import betterbundle.sort.plan.BundlePacker;
 import betterbundle.sort.plan.PlanResult;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -56,7 +56,7 @@ public final class SortButton {
         if (player == null) return true;
 
         InventoryModel model = BundleSnapshotBuilder.build(player);
-        PlanResult result = new ConstrainedTbfdPlanner().plan(model);
+        PlanResult result = new BundlePacker().plan(model);
         if (!result.isOk()) {
             setError(result.error());
             return true;

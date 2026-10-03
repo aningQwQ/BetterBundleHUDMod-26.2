@@ -48,9 +48,9 @@ public final class SortStateMachine {
     private int messageTicks;
 
     private Map<String, Integer> expectedSrc;
-    private Map<String, Integer> expectedDst;
+    private Map<Integer, Map<String, Integer>> expectedDsts;
+    private final java.util.LinkedHashMap<Integer, Integer> expectedTakes = new java.util.LinkedHashMap<>();
     private int expectedSrcSlot = -1;
-    private int expectedDstSlot = -1;
 
     private SortStateMachine() {}
 
@@ -169,9 +169,13 @@ public final class SortStateMachine {
     private void tickWaitConfirm() {
         waitTicks++;
         if (isConfirmed()) {
-            clearExpectation();
             MoveAction action = ordered.get(actionIndex).action();
-            history.push(new MoveAction(action.dstBagSlot(), action.key(), action.count(), action.srcBagSlot()));
+            // 回滚：每个收到物品的目标袋各生成一条反向移动（搬回源袋），best-effort。
+            for (Map.Entry<Integer, Integer> e : new java.util.LinkedHashMap<>(expectedTakes).entrySet()) {
+                history.push(new MoveAction(e.getKey(), action.key(), e.getValue(),
+                        List.of(action.srcBagSlot())));
+            }
+            clearExpectation();
             actionIndex++;
             delayTicks = SortConfig.MIN_DELAY_TICKS
                     + random.nextInt(SortConfig.MAX_DELAY_TICKS - SortConfig.MIN_DELAY_TICKS + 1);
@@ -238,44 +242,63 @@ public final class SortStateMachine {
     private boolean preconditionsHold(Player player, MoveAction action) {
         InventoryModel model = BundleSnapshotBuilder.build(player);
         BagModel src = model.bySlot(action.srcBagSlot());
-        BagModel dst = model.bySlot(action.dstBagSlot());
-        if (src == null || dst == null || dst.locked) return false;
+        if (src == null) return false;
         BagEntry entry = src.findEntry(action.key());
         if (entry == null || entry.count < action.count()) return false;
-        return dst.freeWeight() >= entry.weight;
+        int per = Math.max(1, entry.weight / entry.count);
+        for (int dstSlot : action.dstBagSlots()) {
+            BagModel dst = model.bySlot(dstSlot);
+            if (dst != null && !dst.locked && dst.freeWeight() / per >= 1) return true;
+        }
+        return false;
     }
 
     /** 预期：源袋该物品 -count，目标袋该物品 +count。 */
     private void captureExpectation(Player player, MoveAction action) {
         expectedSrcSlot = action.srcBagSlot();
-        expectedDstSlot = action.dstBagSlot();
-        ItemStack srcStack = stackAt(player, expectedSrcSlot);
-        ItemStack dstStack = stackAt(player, expectedDstSlot);
-
-        Map<String, Integer> srcMap = BundleSignature.of(srcStack);
-        Map<String, Integer> dstMap = BundleSignature.of(dstStack);
         String key = BundleSignature.keyOf(action.key().representative());
 
-        int srcCount = srcMap.getOrDefault(key, 0) - action.count();
+        expectedDsts = new java.util.LinkedHashMap<>();
+        expectedTakes.clear();
+        int remaining = action.count();
+        for (int dstSlot : action.dstBagSlots()) {
+            if (remaining <= 0) break;
+            if (dstSlot == expectedSrcSlot) continue;
+            ItemStack dstStack = stackAt(player, dstSlot);
+            int cap = betterbundle.util.BundleContentsHelper.maxAcceptable(
+                    dstStack, action.key().representative());
+            int take = Math.min(remaining, cap);
+            if (take <= 0) continue;
+            Map<String, Integer> dstMap = BundleSignature.of(dstStack);
+            dstMap.merge(key, take, Integer::sum);
+            expectedDsts.put(dstSlot, dstMap);
+            expectedTakes.put(dstSlot, take);
+            remaining -= take;
+        }
+
+        // 只有真正放出去的部分离开了源袋，余量会返回源袋。
+        int moved = action.count() - remaining;
+        Map<String, Integer> srcMap = BundleSignature.of(stackAt(player, expectedSrcSlot));
+        int srcCount = srcMap.getOrDefault(key, 0) - moved;
         if (srcCount > 0) srcMap.put(key, srcCount);
         else srcMap.remove(key);
-
-        dstMap.merge(key, action.count(), Integer::sum);
-
         expectedSrc = srcMap;
-        expectedDst = dstMap;
     }
 
     private boolean isConfirmed() {
-        if (expectedSrc == null || expectedDst == null) return false;
+        if (expectedSrc == null || expectedDsts == null) return false;
         Minecraft client = Minecraft.getInstance();
         Player player = client.player;
         if (player == null || player.containerMenu.containerId != activeContainerId) return false;
 
-        ItemStack srcStack = stackAt(player, expectedSrcSlot);
-        ItemStack dstStack = stackAt(player, expectedDstSlot);
-        return BundleSignature.of(srcStack).equals(expectedSrc)
-                && BundleSignature.of(dstStack).equals(expectedDst);
+        // 余量会返回源袋，因此确认时先要求光标已清空（所有放入都已完成）。
+        if (!player.containerMenu.getCarried().isEmpty()) return false;
+
+        if (!BundleSignature.of(stackAt(player, expectedSrcSlot)).equals(expectedSrc)) return false;
+        for (Map.Entry<Integer, Map<String, Integer>> e : expectedDsts.entrySet()) {
+            if (!BundleSignature.of(stackAt(player, e.getKey())).equals(e.getValue())) return false;
+        }
+        return true;
     }
 
     /** 安全读取槽位物品；越界/异常一律返回空，绝不抛出。 */
@@ -292,9 +315,8 @@ public final class SortStateMachine {
 
     private void clearExpectation() {
         expectedSrc = null;
-        expectedDst = null;
+        expectedDsts = null;
         expectedSrcSlot = -1;
-        expectedDstSlot = -1;
     }
 
     private void finish(String text) {
