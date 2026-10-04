@@ -228,9 +228,9 @@ public final class BundlePanelRenderer {
 
     public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
-        // 创造模式：整个面板不绘制，只显示“不支持”。
+        // 创造模式：整个面板不绘制（仅开关打开时显示“不支持”）。
         if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) {
-            renderUnsupported(graphics, leftPos, topPos, imageHeight);
+            if (visible) renderUnsupported(graphics, leftPos, topPos, imageHeight);
             return;
         }
         if (!isEffectivelyVisible()) return;

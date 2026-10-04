@@ -28,7 +28,11 @@ public abstract class InventoryScreenMixin {
                 self.topPos,
                 self.imageHeight,
                 mouseX, mouseY);
-        if (creative) return;
+        // 创造模式：保留面板开关按钮，但不绘制面板内容/悬浮放大/整理按钮。
+        if (creative) {
+            renderToggleButton(graphics, self.leftPos + self.imageWidth, self.topPos + 5, mouseX, mouseY);
+            return;
+        }
 
         // Enlarge the bundle icon for the hovered panel item
         int bundleSlot = BundlePanelRenderer.getHoveredBundleSlot();
