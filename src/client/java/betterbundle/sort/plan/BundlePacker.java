@@ -120,15 +120,26 @@ public final class BundlePacker {
         }
         if (totals.isEmpty()) return empty;
 
-        // 唯一目标：满堆 chunk + Worst-Fit 的规范形（与当前摆放无关 -> 幂等；聚堆/填满优先）。
-        return assignTargetsCanonical(bags, capBase, totals, perByKey, maxStackByKey);
+        // 当前摆放里每个袋子含有哪些物品（用于“优先放回已有该物品的袋子”）。
+        Map<BagModel, java.util.Set<ItemKey>> currentKeys = new IdentityHashMap<>();
+        for (BagModel b : bags) {
+            java.util.Set<ItemKey> ks = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+            for (BagEntry e : b.entries) {
+                if (e.movable() && e.count > 0) ks.add(e.key);
+            }
+            currentKeys.put(b, ks);
+        }
+
+        // 混合装箱：优先放回“已有该物品”的袋子（聚堆、少动），否则放最空的袋子（均衡兜底）。
+        return assignTargetsCanonical(bags, capBase, totals, currentKeys, perByKey, maxStackByKey);
     }
 
-    /** 满堆 chunk（maxStack 个）+ 一个 partial，按重量降序做 Worst-Fit。与当前摆放无关。 */
+    /** 满堆 chunk（maxStack 个）+ 一个 partial：优先放回已有该物品的袋子，否则放最空的袋子。 */
     private Map<BagModel, Map<ItemKey, Integer>> assignTargetsCanonical(
             List<BagModel> bags,
             Map<BagModel, Integer> capBase,
             Map<ItemKey, Integer> totals,
+            Map<BagModel, java.util.Set<ItemKey>> currentKeys,
             Map<ItemKey, Integer> perByKey,
             Map<ItemKey, Integer> maxStackByKey) {
 
@@ -158,13 +169,23 @@ public final class BundlePacker {
 
         for (Chunk chunk : chunks) {
             BagModel best = null;
-            int bestRemaining = -1;
+            // 先优先：当前已含有该物品、且放得下的袋子（取袋序最小，稳定且聚堆）。
             for (BagModel b : bags) {
-                int c = cap.get(b);
-                if (c < chunk.weight) continue;
-                if (c > bestRemaining) {
-                    best = b;
-                    bestRemaining = c;
+                if (cap.get(b) < chunk.weight) continue;
+                if (!currentKeys.getOrDefault(b, java.util.Set.of()).contains(chunk.key)) continue;
+                best = b;
+                break;
+            }
+            // 否则：放得下且空余最大的袋子（均衡兜底）。
+            if (best == null) {
+                int bestRemaining = -1;
+                for (BagModel b : bags) {
+                    int c = cap.get(b);
+                    if (c < chunk.weight) continue;
+                    if (c > bestRemaining) {
+                        best = b;
+                        bestRemaining = c;
+                    }
                 }
             }
             if (best == null) continue;
