@@ -20,6 +20,9 @@ public abstract class AbstractRecipeBookScreenMixin {
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+        if (betterbundle.util.CreativeGuard.isCreative(
+                net.minecraft.client.Minecraft.getInstance().player,
+                net.minecraft.client.Minecraft.getInstance().gui.screen())) return;
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         double mouseX = event.x();
         double mouseY = event.y();
@@ -66,6 +69,9 @@ public abstract class AbstractRecipeBookScreenMixin {
 
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
     private void onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+        if (betterbundle.util.CreativeGuard.isCreative(
+                net.minecraft.client.Minecraft.getInstance().player,
+                net.minecraft.client.Minecraft.getInstance().gui.screen())) return;
         if (BundlePanelRenderer.searchFocused) {
             BundlePanelRenderer.onCharTyped((char) event.codepoint());
             cir.setReturnValue(true);
@@ -74,6 +80,9 @@ public abstract class AbstractRecipeBookScreenMixin {
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+        if (betterbundle.util.CreativeGuard.isCreative(
+                net.minecraft.client.Minecraft.getInstance().player,
+                net.minecraft.client.Minecraft.getInstance().gui.screen())) return;
         SortStateMachine.get().abortByUser();
         if (BundlePanelRenderer.searchFocused) {
             BundlePanelRenderer.onSearchKeyPress(event.key());
