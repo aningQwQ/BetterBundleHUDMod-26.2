@@ -149,20 +149,18 @@ public final class BundlePacker {
             int total = totals.getOrDefault(key, 0);
             int per = Math.max(1, perByKey.getOrDefault(key, 1));
 
-            BagModel absorber = null;   // 能“吸收其余全部副本”的袋子
+            BagModel absorber = null;   // 持有袋中能“吸收其余全部副本”的
             int absorberFree = -1;
-            BagModel majority = null;   // 否则退而取“含得最多”的袋子
+            BagModel majority = null;
             int majorityN = -1;
 
             for (BagModel b : bags) {
                 int n = state.getOrDefault(b, Map.of()).getOrDefault(key, 0);
-                if (n <= 0) continue;   // 只在“已含该物品”的袋子里选
+                if (n <= 0) continue;
                 int free = Math.max(0, capBase.get(b) - used.get(b));
-                if (free >= (total - n) * per) {
-                    if (free > absorberFree) {
-                        absorber = b;
-                        absorberFree = free;
-                    }
+                if (free >= (total - n) * per && free > absorberFree) {
+                    absorber = b;
+                    absorberFree = free;
                 }
                 if (n > majorityN) {
                     majority = b;
@@ -170,7 +168,22 @@ public final class BundlePacker {
                 }
             }
 
-            if (absorber != null) home.put(key, absorber);
+            if (absorber != null) {
+                home.put(key, absorber);
+                continue;
+            }
+
+            // 没有持有袋能吸收：优先合并进“有空位的非持有袋”（把同类聚成一袋）。
+            BagModel consolidate = null;
+            for (BagModel b : bags) {
+                if (state.getOrDefault(b, Map.of()).getOrDefault(key, 0) > 0) continue;
+                int free = Math.max(0, capBase.get(b) - used.get(b));
+                if (free >= total * per) {
+                    consolidate = b;
+                    break;
+                }
+            }
+            if (consolidate != null) home.put(key, consolidate);
             else if (majority != null) home.put(key, majority);
             else home.put(key, bags.get(0));
         }
