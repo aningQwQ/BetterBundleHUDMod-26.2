@@ -85,6 +85,7 @@ public final class SortStateMachine {
         Minecraft client = Minecraft.getInstance();
         Player player = client.player;
         if (player == null) return "未进入世界";
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return "创造模式暂不支持整理";
         if (!player.containerMenu.getCarried().isEmpty()) return "请先放下光标上的物品";
 
         // 用「动作次数」衡量工作量：每个动作成本固定（发包+确认+节流），

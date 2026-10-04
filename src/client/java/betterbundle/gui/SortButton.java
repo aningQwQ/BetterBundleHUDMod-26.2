@@ -55,6 +55,11 @@ public final class SortButton {
         Player player = client.player;
         if (player == null) return true;
 
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) {
+            setError("创造模式暂不支持整理");
+            return true;
+        }
+
         InventoryModel model = BundleSnapshotBuilder.build(player);
         PlanResult result = new BundlePacker().plan(model);
         if (!result.isOk()) {

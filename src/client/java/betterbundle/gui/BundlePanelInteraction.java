@@ -131,6 +131,8 @@ public final class BundlePanelInteraction {
         Player player = client.player;
         ItemStack stack = hoveredSlot.getItem();
         if (stack.isEmpty() || BundleContentsHelper.isNonEmptyBundle(stack)) return false;
+        // 只接受真玩家背包槽位，避免创造模式 picker 槽复制物品。
+        if (hoveredSlot.container != player.getInventory()) return false;
 
         List<BundlePanelRenderer.BundleSlotEntry> bundles = BundlePanelRenderer.getAllBundles();
         List<Integer> targets = buildInsertTargets(bundles, stack, hoveredSlot.index);
@@ -233,6 +235,8 @@ public final class BundlePanelInteraction {
         Minecraft client = Minecraft.getInstance();
         Player player = client.player;
         if (player == null) return false;
+        // 创造模式：光标可能来自无限 picker，禁用面板分发塞入，避免复制。
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
 
         ItemStack cursor = player.containerMenu.getCarried();
         if (cursor.isEmpty()) return false;
