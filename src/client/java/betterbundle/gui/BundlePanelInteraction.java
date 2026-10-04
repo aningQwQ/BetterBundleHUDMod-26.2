@@ -18,12 +18,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-import betterbundle.sort.net.BundleSignature;
 import betterbundle.util.BundleContentsHelper;
 
 public final class BundlePanelInteraction {
@@ -147,8 +144,9 @@ public final class BundlePanelInteraction {
 
         Player player = client.player;
         if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
-        // 光标非空时交给原版处理，绝不带着光标上的物品参与自动连招。
-        if (!player.containerMenu.getCarried().isEmpty()) return false;
+        // 入队与光标状态解耦：快速滑动时本机正在用光标搬运上一格，光标常常非空，
+        // 若在这里拒绝入队，滑过去的槽位会被整体丢弃，表现为「稍快就不放入」。
+        // 真正执行由状态机串行进行，且只在光标为空时才开始，安全性不受影响。
 
         ItemStack stack = hoveredSlot.getItem();
         if (stack.isEmpty()) return false;
@@ -243,8 +241,8 @@ public final class BundlePanelInteraction {
 
     // ==== 空格批量塞入：确认式状态机 ====
 
-    private static final int MAX_PENDING_SLOTS = 64;
-    private static final int BULK_CONFIRM_TIMEOUT_TICKS = 20; // 1s
+    private static final int MAX_PENDING_SLOTS = 256;
+    private static final int BULK_CONFIRM_TIMEOUT_TICKS = 40; // 2s
 
     private enum BulkPhase { IDLE, WAIT_PICKUP, WAIT_INSERT }
 
@@ -255,17 +253,17 @@ public final class BundlePanelInteraction {
     private static int bulkWaitTicks;
     private static int bulkSrcSlot = -1;
     private static String bulkSrcBefore = "";
-    private static Map<Integer, Map<String, Integer>> bulkExpectedDsts;
+    private static boolean bulkRecoverySent;
     private static AbstractContainerMenu bulkMenu;
 
     /**
      * 每客户端 tick 推进批量塞入。全过程串行：
      * <ol>
      *   <li>WAIT_PICKUP：点源槽拿起整叠，等光标变为非空（或源槽已空）；</li>
-     *   <li>WAIT_INSERT：从已确认的光标构造目标袋，点入后把余量点回源槽，等目标袋内容达标且光标清空。</li>
+     *   <li>WAIT_INSERT：从已确认的光标构造目标袋，点入后把余量点回源槽，等光标清空即可开始下一格。</li>
      * </ol>
-     * 因为目标袋点击一定发生在「光标已确认非空」之后，绝不会在空光标上点袋子槽，
-     * 也就不会把袋子拿起并（在余量回填时）塞进容器。
+     * 关键不变量：目标袋点击一定发生在「光标已确认非空」之后，且下一格的拿起只在光标为空时开始，
+     * 因此绝不会在空光标上点袋子槽，也就不会把袋子拿起并（在余量回填时）塞进容器。
      */
     public static void onClientTick() {
         Minecraft client = Minecraft.getInstance();
@@ -285,11 +283,8 @@ public final class BundlePanelInteraction {
         }
         // 整理进行中：暂停，避免两套自动操作互相踩踏。
         if (betterbundle.sort.exec.SortStateMachine.get().isRunning()) return;
-        // 光标被外部操作占用时，直接放弃队列，避免错判。
-        if (!player.containerMenu.getCarried().isEmpty()) {
-            resetBulk();
-            return;
-        }
+        // 光标被占用时先暂停（不丢弃队列）：可能是外部操作或尚未同步，等光标空了继续。
+        if (!player.containerMenu.getCarried().isEmpty()) return;
 
         while (!pendingSlots.isEmpty()) {
             int slot = pendingSlots.pollFirst();
@@ -314,6 +309,7 @@ public final class BundlePanelInteraction {
 
         bulkSrcSlot = slotIndex;
         bulkSrcBefore = stackSignature(stack);
+        bulkRecoverySent = false;
         connection.send(makeClickPacket(player.containerMenu.containerId, slotIndex, (byte) 0));
         bulkPhase = BulkPhase.WAIT_PICKUP;
         bulkWaitTicks = 0;
@@ -335,25 +331,28 @@ public final class BundlePanelInteraction {
                 finishBulkSlot();
                 return;
             }
-            if (bulkWaitTicks > BULK_CONFIRM_TIMEOUT_TICKS) resetBulk();
+            // 超时：只跳过当前格、保留整条队列（不要 resetBulk，否则会连带丢掉后面所有待处理格）。
+            if (bulkWaitTicks > BULK_CONFIRM_TIMEOUT_TICKS) finishBulkSlot();
             return;
         }
 
-        // WAIT_INSERT：目标袋内容达标 + 光标清空。
-        boolean done = player.containerMenu.getCarried().isEmpty();
-        if (done && bulkExpectedDsts != null) {
-            for (Map.Entry<Integer, Map<String, Integer>> e : bulkExpectedDsts.entrySet()) {
-                if (!BundleSignature.of(stackAt(player, e.getKey())).equals(e.getValue())) {
-                    done = false;
-                    break;
-                }
-            }
-        }
-        if (done) {
+        // WAIT_INSERT：只需等光标清空——这是继续下一格的关键不变量。
+        // 袋子内容与光标更新由服务端同批下发，无需逐袋签名校验，避免拖慢整条流水线。
+        if (player.containerMenu.getCarried().isEmpty()) {
             finishBulkSlot();
             return;
         }
-        if (bulkWaitTicks > BULK_CONFIRM_TIMEOUT_TICKS) resetBulk();
+        if (bulkWaitTicks > BULK_CONFIRM_TIMEOUT_TICKS) {
+            // 光标长时间未清空：兜底把光标物品点回源槽（避免滞留），只跳过当前格，保留队列。
+            ClientPacketListener connection = client.getConnection();
+            if (!bulkRecoverySent && connection != null) {
+                connection.send(makeClickPacket(player.containerMenu.containerId, bulkSrcSlot, (byte) 0));
+                bulkRecoverySent = true;
+                bulkWaitTicks = 0;
+                return;
+            }
+            finishBulkSlot();
+        }
     }
 
     private static void sendInsertPhase(Minecraft client, Player player, ItemStack carried) {
@@ -366,23 +365,12 @@ public final class BundlePanelInteraction {
         List<Integer> targets = buildInsertTargets(
                 BundlePanelRenderer.getAllBundles(), carried, bulkSrcSlot);
 
-        Map<Integer, Map<String, Integer>> expected = new LinkedHashMap<>();
         int remaining = carried.getCount();
-        String key = BundleSignature.keyOf(carried);
         for (int target : targets) {
             if (remaining <= 0) break;
-            ItemStack targetStack = stackAt(player, target);
-            int cap = BundleContentsHelper.maxAcceptable(targetStack, carried);
+            int cap = BundleContentsHelper.maxAcceptable(stackAt(player, target), carried);
             if (cap <= 0) continue;
-            int take = Math.min(cap, remaining);
-            Map<String, Integer> sig = BundleSignature.of(targetStack);
-            sig.merge(key, take, Integer::sum);
-            expected.put(target, sig);
-            remaining -= take;
-        }
-        bulkExpectedDsts = expected;
-
-        for (int target : expected.keySet()) {
+            remaining -= Math.min(cap, remaining);
             connection.send(makeClickPacket(containerId, target, (byte) 0));
         }
         // 余量点回源槽：全部放入时光标为空且源槽为空，是无害 no-op；
@@ -397,7 +385,7 @@ public final class BundlePanelInteraction {
         if (bulkSrcSlot >= 0) queuedSlots.remove(bulkSrcSlot);
         bulkSrcSlot = -1;
         bulkSrcBefore = "";
-        bulkExpectedDsts = null;
+        bulkRecoverySent = false;
         bulkPhase = BulkPhase.IDLE;
         bulkWaitTicks = 0;
     }
@@ -407,7 +395,7 @@ public final class BundlePanelInteraction {
         queuedSlots.clear();
         bulkSrcSlot = -1;
         bulkSrcBefore = "";
-        bulkExpectedDsts = null;
+        bulkRecoverySent = false;
         bulkPhase = BulkPhase.IDLE;
         bulkWaitTicks = 0;
     }

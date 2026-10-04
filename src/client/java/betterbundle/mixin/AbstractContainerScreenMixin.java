@@ -13,6 +13,12 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -36,9 +42,13 @@ public abstract class AbstractContainerScreenMixin {
         // 玩家任意输入 → 立即中止整理（不回滚，D4）
         SortStateMachine.get().abortByUser();
 
-        // Bulk-insert: space+left anywhere starts the timer (0.05s to activate)
+        // Bulk-insert: space+left anywhere starts the sweep.
         if (event.button() == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
             BundlePanelInteraction.startBulkInsert();
+            sweeping = true;
+            sweepLastX = event.x();
+            sweepLastY = event.y();
+            sweptSlots.clear();
         }
 
         // Space+Click works on ALL container screens.
@@ -47,7 +57,11 @@ public abstract class AbstractContainerScreenMixin {
         Slot hovered = findSlotAt(self, event.x(), event.y());
         if (hovered != null && hovered.hasItem()) {
             boolean handled = BundlePanelInteraction.handleSpaceClick(hovered);
-            if (handled) { cir.setReturnValue(true); return; }
+            if (handled) {
+                sweptSlots.add(hovered.index);
+                cir.setReturnValue(true);
+                return;
+            }
         }
 
         double mx = event.x();
@@ -120,7 +134,8 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
     private void onMouseReleased(MouseButtonEvent event, CallbackInfoReturnable<Boolean> cir) {
         BundlePanelInteraction.stopBulkInsert();
-        lastBulkSlot = -1;
+        sweeping = false;
+        sweptSlots.clear();
         if (!BundlePanelRenderer.isEffectivelyVisible()) return;
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         if (BundlePanelInteraction.isInsidePanel(event.x(), event.y(),
@@ -138,22 +153,83 @@ public abstract class AbstractContainerScreenMixin {
         }
     }
 
-    private int lastBulkSlot = -1;
+    /** 快速滑动时鼠标事件会在两格之间跳跃，只取当前悬停格会漏掉中间槽位。 */
+    private boolean sweeping;
+    private double sweepLastX;
+    private double sweepLastY;
+    private final Set<Integer> sweptSlots = new HashSet<>();
 
     @Inject(method = "mouseDragged", at = @At("HEAD"), cancellable = true)
     private void onMouseDragged(MouseButtonEvent event, double dx, double dy,
                                  CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
-        if (!BundlePanelInteraction.isBulkInsertActive()) return;
-        if (!isSpaceDown()) { BundlePanelInteraction.stopBulkInsert(); return; }
+        if (!sweeping) return;
+        if (!isSpaceDown()) {
+            BundlePanelInteraction.stopBulkInsert();
+            sweeping = false;
+            sweptSlots.clear();
+            return;
+        }
 
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
-        Slot hovered = findSlotAt(self, event.x(), event.y());
-        if (hovered != null && hovered.hasItem() && hovered.index != lastBulkSlot) {
-            lastBulkSlot = hovered.index;
-            BundlePanelInteraction.handleSpaceClick(hovered);
-        }
+        double mx = event.x();
+        double my = event.y();
+        sweepEnqueue(self, sweepLastX, sweepLastY, mx, my);
+        sweepLastX = mx;
+        sweepLastY = my;
         cir.setReturnValue(true);
+    }
+
+    /** 一次线段扫过的槽位及其进入参数，用于按滑动路径排序。 */
+    private record SweepHit(double t, Slot slot) {}
+
+    /**
+     * 把「上一次位置 → 当前位置」这条线段与每个槽位的矩形做相交判断，穿过就补入，
+     * 并按进入线段的时间参数 t 排序，保证按滑动经过的顺序入队（而不是按槽位索引乱序）。
+     */
+    private void sweepEnqueue(AbstractContainerScreen<?> self, double x0, double y0, double x1, double y1) {
+        List<SweepHit> hits = new ArrayList<>();
+        for (Slot slot : self.getMenu().slots) {
+            if (!slot.isActive() || !slot.hasItem()) continue;
+            if (sweptSlots.contains(slot.index)) continue;
+            double t = segmentEntryParam(self, slot, x0, y0, x1, y1);
+            if (t >= 0.0) hits.add(new SweepHit(t, slot));
+        }
+        hits.sort(Comparator.comparingDouble(SweepHit::t));
+        for (SweepHit hit : hits) {
+            if (!sweptSlots.add(hit.slot().index)) continue;
+            BundlePanelInteraction.handleSpaceClick(hit.slot());
+        }
+    }
+
+    /** Liang-Barsky：返回线段进入槽位矩形（含 ±1px 容差）的时间参数 t∈[0,1]，不相交返回 -1。 */
+    private static double segmentEntryParam(AbstractContainerScreen<?> self, Slot slot,
+                                            double x0, double y0, double x1, double y1) {
+        double minX = self.leftPos + slot.x - 1;
+        double maxX = self.leftPos + slot.x + 16 + 1;
+        double minY = self.topPos + slot.y - 1;
+        double maxY = self.topPos + slot.y + 16 + 1;
+        double dx = x1 - x0;
+        double dy = y1 - y0;
+        double t0 = 0.0;
+        double t1 = 1.0;
+        double[] p = {-dx, dx, -dy, dy};
+        double[] q = {x0 - minX, maxX - x0, y0 - minY, maxY - y0};
+        for (int i = 0; i < 4; i++) {
+            if (p[i] == 0.0) {
+                if (q[i] < 0.0) return -1.0;
+            } else {
+                double r = q[i] / p[i];
+                if (p[i] < 0.0) {
+                    if (r > t1) return -1.0;
+                    if (r > t0) t0 = r;
+                } else {
+                    if (r < t0) return -1.0;
+                    if (r < t1) t1 = r;
+                }
+            }
+        }
+        return t0 <= t1 ? t0 : -1.0;
     }
 
     /** 与原生 AbstractContainerScreen.getHoveredSlot 等价：按事件坐标找活动槽位（含 ±1px 容差）。 */
