@@ -41,8 +41,10 @@ public abstract class AbstractContainerScreenMixin {
             BundlePanelInteraction.startBulkInsert();
         }
 
-        // Space+Click works on ALL container screens
-        Slot hovered = self.hoveredSlot;
+        // Space+Click works on ALL container screens.
+        // 用事件坐标定位槽位（与原生 getHoveredSlot 一致），不要用 hoveredSlot 字段：
+        // 该字段只在 mouseMoved 里更新，单击可能先于本帧的移动事件到达而读到旧槽位。
+        Slot hovered = findSlotAt(self, event.x(), event.y());
         if (hovered != null && hovered.hasItem()) {
             boolean handled = BundlePanelInteraction.handleSpaceClick(hovered);
             if (handled) { cir.setReturnValue(true); return; }
@@ -146,12 +148,26 @@ public abstract class AbstractContainerScreenMixin {
         if (!isSpaceDown()) { BundlePanelInteraction.stopBulkInsert(); return; }
 
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
-        Slot hovered = self.hoveredSlot;
+        Slot hovered = findSlotAt(self, event.x(), event.y());
         if (hovered != null && hovered.hasItem() && hovered.index != lastBulkSlot) {
             lastBulkSlot = hovered.index;
             BundlePanelInteraction.handleSpaceClick(hovered);
         }
         cir.setReturnValue(true);
+    }
+
+    /** 与原生 AbstractContainerScreen.getHoveredSlot 等价：按事件坐标找活动槽位（含 ±1px 容差）。 */
+    private static Slot findSlotAt(AbstractContainerScreen<?> self, double mouseX, double mouseY) {
+        double relX = mouseX - self.leftPos;
+        double relY = mouseY - self.topPos;
+        for (Slot slot : self.getMenu().slots) {
+            if (!slot.isActive()) continue;
+            if (relX >= slot.x - 1 && relX < slot.x + 16 + 1
+                    && relY >= slot.y - 1 && relY < slot.y + 16 + 1) {
+                return slot;
+            }
+        }
+        return null;
     }
 
     @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
