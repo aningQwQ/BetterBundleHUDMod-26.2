@@ -44,9 +44,14 @@ public final class BundlePacker {
             if (b.locked) locked.add(b);
         }
 
-        // 当前摆放已等于目标（无需搬动）→ 返回“成功但空计划”，UI 显示“无需整理”，而不是报错。
+        // 当前摆放已等于目标（无需搬动）→ “成功但空计划”，UI 显示“无需整理”。
+        // 若与目标仍有差异却一步都推不动 → 明确报“受限”，避免把卡死误报成“无需整理”。
         if (moves.isEmpty()) {
-            return PlanResult.ok(new SortPlan(new ArrayList<>(), locked));
+            Diff d = computeDiff(vm, target);
+            if (d.out.isEmpty() && d.in.isEmpty()) {
+                return PlanResult.ok(new SortPlan(new ArrayList<>(), locked));
+            }
+            return PlanResult.fail("空间不足或受限，无法进一步整理");
         }
 
         List<PlannedMove> ordered = validPrefix(live, moves);
@@ -244,12 +249,14 @@ public final class BundlePacker {
                          Map<BagModel, Map<ItemKey, Integer>> target,
                          Map<ItemKey, Integer> perByKey,
                          List<PlannedMove> moves) {
+        java.util.Set<String> seen = new java.util.HashSet<>();
         int guard = 0;
         while (guard++ < 512 && moves.size() < SortConfig.MAX_TOTAL_MOVES) {
             Diff diff = computeDiff(vm, target);
             if (diff.out.isEmpty() && diff.in.isEmpty()) return;
+            if (!seen.add(stateSig(vm))) return;   // 状态重复 -> 防环，停止
 
-            // 直接：把源袋的整叠搬进有空间的接收袋（顶满）。遍历所有可接收袋，确保至少能放下 1 个。
+            // 直接：搬进有空间的接收袋（要求“离目标差距”严格变小）。
             boolean moved = false;
             for (Map.Entry<BagModel, Map<ItemKey, Integer>> so : diff.out.entrySet()) {
                 BagModel src = so.getKey();
@@ -258,7 +265,7 @@ public final class BundlePacker {
                     for (BagModel dst : diff.in.keySet()) {
                         if (diff.in.get(dst).getOrDefault(key, 0) <= 0) continue;
                         if (dst.freeWeight() < per) continue;
-                        if (tryFill(src, key, dst, vm, perByKey, moves, diff)) {
+                        if (tryFill(src, key, dst, vm, perByKey, moves, diff, false)) {
                             moved = true;
                             break;
                         }
@@ -269,7 +276,8 @@ public final class BundlePacker {
             }
             if (moved) continue;
 
-            // 僵局：某个“需要接收”的袋子是满的，把它里面“本就要搬走”的一叠挪到缓冲袋。
+            // 僵局：把某个满袋里“本就要搬走”的一叠挪到缓冲袋。
+            // 允许“平移”（差距不变）的临时步来打破僵局；由上方的访问状态检测防止死循环。
             for (Map.Entry<BagModel, Map<ItemKey, Integer>> ie : diff.in.entrySet()) {
                 BagModel blocked = ie.getKey();
                 if (blocked.freeWeight() > 0) continue;
@@ -283,7 +291,7 @@ public final class BundlePacker {
                 if (victim == null) continue;
                 BagModel buffer = findBuffer(vm, diff, victim, blocked);
                 if (buffer == null) continue;
-                if (tryFill(blocked, victim.key, buffer, vm, perByKey, moves, diff)) {
+                if (tryFill(blocked, victim.key, buffer, vm, perByKey, moves, diff, true)) {
                     moved = true;
                     break;
                 }
@@ -292,13 +300,28 @@ public final class BundlePacker {
         }
     }
 
+    /** 当前摆放的签名（用于检测重复状态、防止来回死循环）。 */
+    private String stateSig(InventoryModel vm) {
+        StringBuilder sb = new StringBuilder();
+        for (BagModel b : vm.bags) {
+            List<String> parts = new ArrayList<>();
+            for (BagEntry e : b.entries) {
+                if (e.movable() && e.count > 0) parts.add(keyId(e.key) + ":" + e.count);
+            }
+            parts.sort(null);
+            sb.append(String.join(",", parts)).append('|');
+        }
+        return sb.toString();
+    }
+
     /**
-     * 尝试一次搬运，但只有当它能严格减小「离目标的差距」时才生成动作。
-     * 这样落子具有单调性，不会来回抖动/超投振荡（避免 256 步死循环）。
+     * 尝试一次搬运。
+     * allowFlat=false：只接受让「离目标差距」严格变小的动作（正常直填）。
+     * allowFlat=true ：允许差距不变（临时平移），用于打破僵局。
      */
     private boolean tryFill(BagModel src, ItemKey key, BagModel dst,
                             InventoryModel vm, Map<ItemKey, Integer> perByKey,
-                            List<PlannedMove> moves, Diff diff) {
+                            List<PlannedMove> moves, Diff diff, boolean allowFlat) {
         BagEntry se = src.findEntry(key);
         if (se == null || se.count <= 0) return false;
         int per = Math.max(1, perByKey.getOrDefault(key, 1));
@@ -308,7 +331,7 @@ public final class BundlePacker {
         int over = diff.out.getOrDefault(src, Map.of()).getOrDefault(key, 0);
         int need = diff.in.getOrDefault(dst, Map.of()).getOrDefault(key, 0);
         int delta = (Math.abs(over - take) - over) + (Math.abs(need - take) - need);
-        if (delta >= 0) return false;   // 不下降 -> 拒绝
+        if (allowFlat ? delta > 0 : delta >= 0) return false;   // 距离不能变大
 
         moves.add(new PlannedMove(nextId++,
                 MoveAction.to(src.invSlot, key, se.count, dst.invSlot)));
