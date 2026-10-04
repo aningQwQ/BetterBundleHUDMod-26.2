@@ -360,19 +360,22 @@ public final class BundlePacker {
         return best;
     }
 
+    /** 缓冲目标：优先“正需要该物品”的袋子，其次空余最大的袋子；只要放得下 >=1 个即可。 */
     private BagModel findBuffer(InventoryModel vm, Diff diff, BagEntry victim, BagModel exclude) {
-        BagModel wants = null;   // 正好需要该物品的袋子（缓冲同时就是进度）
-        BagModel empty = null;
+        int p = Math.max(1, victim.weight / Math.max(1, victim.count));
+        BagModel wants = null;
+        BagModel best = null;
         for (BagModel b : vm.bags) {
             if (b == exclude || b.locked) continue;
-            if (b.freeWeight() < victim.weight) continue;
+            int free = b.freeWeight();
+            if (free < p) continue;
             if (diff.in.getOrDefault(b, Map.of()).getOrDefault(victim.key, 0) > 0) {
-                if (wants == null || b.freeWeight() < wants.freeWeight()) wants = b;
-            } else if (b.isEmptyBag()) {
-                if (empty == null) empty = b;
+                if (wants == null || free > wants.freeWeight()) wants = b;
+            } else if (best == null || free > best.freeWeight()) {
+                best = b;
             }
         }
-        return wants != null ? wants : empty;
+        return wants != null ? wants : best;
     }
 
     // ---------- 差异计算 ----------
