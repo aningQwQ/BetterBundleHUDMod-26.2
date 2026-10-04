@@ -204,10 +204,13 @@ public final class BundlePacker {
             Map<ItemKey, Integer> maxStackByKey,
             Map<ItemKey, BagModel> home) {
 
-        // 类型顺序：先按 home 的袋序，再按物品 ID（确定性）
+        // 类型顺序：先按“总重量从大到小”（大类型优先占满整袋、聚堆），
+        // 再按 home 袋序、物品 ID（确定性）。
         List<ItemKey> keys = new ArrayList<>(totals.keySet());
         keys.sort(Comparator
-                .comparingInt((ItemKey k) -> bags.indexOf(home.get(k)))
+                .comparingInt((ItemKey k) -> -(totals.getOrDefault(k, 0)
+                        * Math.max(1, perByKey.getOrDefault(k, 1))))
+                .thenComparingInt(k -> bags.indexOf(home.get(k)))
                 .thenComparing(BundlePacker::keyId));
 
         Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
