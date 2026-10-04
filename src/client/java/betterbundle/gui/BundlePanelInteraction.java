@@ -132,8 +132,7 @@ public final class BundlePanelInteraction {
         if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
         ItemStack stack = hoveredSlot.getItem();
         if (stack.isEmpty() || BundleContentsHelper.isNonEmptyBundle(stack)) return false;
-        // 只接受真玩家背包槽位，避免创造模式 picker 槽复制物品。
-        if (hoveredSlot.container != player.getInventory()) return false;
+        // 创造模式已在上方整体禁用；生存下允许任意槽位（含箱子等容器）塞入。
 
         List<BundlePanelRenderer.BundleSlotEntry> bundles = BundlePanelRenderer.getAllBundles();
         List<Integer> targets = buildInsertTargets(bundles, stack, hoveredSlot.index);
