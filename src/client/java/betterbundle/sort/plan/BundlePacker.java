@@ -279,25 +279,33 @@ public final class BundlePacker {
             }
             if (moved) continue;
 
-            // 僵局：把某个满袋里“本就要搬走”的一叠挪到缓冲袋。
-            // 允许“平移”（差距不变）的临时步来打破僵局；由上方的访问状态检测防止死循环。
+            // 僵局：某个“需要接收”的袋子剩余空间连 1 个该物品都放不下（几乎满），
+            // 把它里面“本就要搬走”的一叠挪到缓冲袋腾位置。
+            // 允许“平移”（差距不变）的临时步；由上方的访问状态检测防止死循环。
             for (Map.Entry<BagModel, Map<ItemKey, Integer>> ie : diff.in.entrySet()) {
                 BagModel blocked = ie.getKey();
-                if (blocked.freeWeight() > 0) continue;
-                BagEntry victim = null;
-                for (BagEntry e : blocked.entries) {
-                    if (!e.movable() || e.count <= 0) continue;
-                    if (diff.out.getOrDefault(blocked, Map.of()).getOrDefault(e.key, 0) <= 0) continue;
-                    victim = e;
-                    break;
+                for (Map.Entry<ItemKey, Integer> needEn : ie.getValue().entrySet()) {
+                    if (moved) break;
+                    int need = needEn.getValue();
+                    if (need <= 0) continue;
+                    int perN = Math.max(1, perByKey.getOrDefault(needEn.getKey(), 1));
+                    if (blocked.freeWeight() >= perN) continue;   // 还放得下 >=1 个 -> 直填会处理
+
+                    BagEntry victim = null;
+                    for (BagEntry e : blocked.entries) {
+                        if (!e.movable() || e.count <= 0) continue;
+                        if (diff.out.getOrDefault(blocked, Map.of()).getOrDefault(e.key, 0) <= 0) continue;
+                        victim = e;
+                        break;
+                    }
+                    if (victim == null) continue;
+                    BagModel buffer = findBuffer(vm, diff, victim, blocked);
+                    if (buffer == null) continue;
+                    if (tryFill(blocked, victim.key, buffer, vm, perByKey, moves, diff, true)) {
+                        moved = true;
+                    }
                 }
-                if (victim == null) continue;
-                BagModel buffer = findBuffer(vm, diff, victim, blocked);
-                if (buffer == null) continue;
-                if (tryFill(blocked, victim.key, buffer, vm, perByKey, moves, diff, true)) {
-                    moved = true;
-                    break;
-                }
+                if (moved) break;
             }
             if (!moved) return;
         }
