@@ -170,10 +170,10 @@ public final class BundlePanelInteraction {
                 cands.add(entry);
             }
         }
+        // 与整理的目标一致：优先“已有该物品”的袋子（按当前列表顺序），否则放最空的袋子。
         cands.sort(Comparator
                 .comparingInt((BundlePanelRenderer.BundleSlotEntry e) ->
                         BundleContentsHelper.sameItemCount(e.bundleStack(), stack) > 0 ? 0 : 1)
-                .thenComparingInt(e -> -BundleContentsHelper.sameItemCount(e.bundleStack(), stack))
                 .thenComparingInt(e -> -BundleContentsHelper.maxAcceptable(e.bundleStack(), stack)));
 
         List<Integer> targets = new ArrayList<>();
