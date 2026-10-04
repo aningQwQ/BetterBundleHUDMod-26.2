@@ -61,7 +61,11 @@ public final class SortButton {
             setError(result.error());
             return true;
         }
-        fsm.start(result.plan());
+        // start 可能拒绝（如光标持物/状态不符）；把原因显示出来，避免“点了没反应”。
+        String reason = fsm.start(result.plan());
+        if (reason != null && !reason.isEmpty()) {
+            setError(reason);
+        }
         return true;
     }
 

@@ -87,9 +87,9 @@ public final class SortStateMachine {
         if (player == null) return "未进入世界";
         if (!player.containerMenu.getCarried().isEmpty()) return "请先放下光标上的物品";
 
-        int items = 0;
-        for (PlannedMove m : plan.moves()) items += m.action().count();
-        if (items > SortConfig.MAX_TOTAL_ITEMS) return "需要整理物品过多，请分批整理";
+        // 用「动作次数」衡量工作量：每个动作成本固定（发包+确认+节流），
+        // 与它搬运多少物品无关。避免用“整叠数量之和”这种被放大的假指标误拒。
+        if (plan.moves().size() > SortConfig.MAX_TOTAL_MOVES) return "操作次数过多，请分批整理";
 
         ordered.clear();
         ordered.addAll(plan.moves());
