@@ -37,7 +37,7 @@ public abstract class AbstractContainerScreenMixin {
         SortStateMachine.get().abortByUser();
 
         // Bulk-insert: space+left anywhere starts the timer (0.05s to activate)
-        if (event.button() == 0 && isSpaceDown()) {
+        if (event.button() == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
             BundlePanelInteraction.startBulkInsert();
         }
 

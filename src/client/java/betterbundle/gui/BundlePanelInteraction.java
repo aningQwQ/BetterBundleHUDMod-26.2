@@ -129,6 +129,7 @@ public final class BundlePanelInteraction {
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) != GLFW.GLFW_PRESS) return false;
 
         Player player = client.player;
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
         ItemStack stack = hoveredSlot.getItem();
         if (stack.isEmpty() || BundleContentsHelper.isNonEmptyBundle(stack)) return false;
         // 只接受真玩家背包槽位，避免创造模式 picker 槽复制物品。

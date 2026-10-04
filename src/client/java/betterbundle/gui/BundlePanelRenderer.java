@@ -157,7 +157,12 @@ public final class BundlePanelRenderer {
     }
 
     public static int getHoveredBundleSlot() { return visible ? hoveredBundleSlot : -1; }
-    public static boolean isEffectivelyVisible() { return visible && !isRecipeBookOpen(); }
+    public static boolean isEffectivelyVisible() {
+        // 创造背包界面：面板整体视为不可见（各交互分支都会因此自然跳过）。
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) return false;
+        return visible && !isRecipeBookOpen();
+    }
     public static void toggleVisible() { visible = !visible; }
 
     // --- category button layout ---
