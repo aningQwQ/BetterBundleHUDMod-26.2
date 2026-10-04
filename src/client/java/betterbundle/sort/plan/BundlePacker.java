@@ -24,18 +24,6 @@ import java.util.Map;
  */
 public final class BundlePacker {
 
-    private static final class Chunk {
-        final ItemKey key;
-        final int count;
-        final int weight;
-
-        Chunk(ItemKey key, int count, int weight) {
-            this.key = key;
-            this.count = count;
-            this.weight = weight;
-        }
-    }
-
     private int nextId;
 
     public PlanResult plan(InventoryModel live) {
@@ -51,13 +39,19 @@ public final class BundlePacker {
         List<PlannedMove> moves = new ArrayList<>();
         realize(vm, target, perByKey, moves);
 
-        List<PlannedMove> ordered = validPrefix(live, moves);
-        if (ordered.isEmpty()) return PlanResult.fail("没有可安全执行的整理步骤");
-
         List<BagModel> locked = new ArrayList<>();
         for (BagModel b : vm.bags) {
             if (b.locked) locked.add(b);
         }
+
+        // 当前摆放已等于目标（无需搬动）→ 返回“成功但空计划”，UI 显示“无需整理”，而不是报错。
+        if (moves.isEmpty()) {
+            return PlanResult.ok(new SortPlan(new ArrayList<>(), locked));
+        }
+
+        List<PlannedMove> ordered = validPrefix(live, moves);
+        if (ordered.isEmpty()) return PlanResult.fail("没有可安全执行的整理步骤");
+
         return PlanResult.ok(new SortPlan(ordered, locked));
     }
 
@@ -99,43 +93,88 @@ public final class BundlePacker {
         Map<BagModel, Map<ItemKey, Integer>> empty = new IdentityHashMap<>();
         if (bags.isEmpty()) return empty;
 
-        // 每种物品的总数，以及“当前各袋里有多少”
+        // 总数 + 当前各袋数量
         Map<ItemKey, Integer> totals = new LinkedHashMap<>();
-        Map<ItemKey, Map<BagModel, Integer>> curCount = new LinkedHashMap<>();
-        for (BagModel b : vm.bags) {
+        Map<BagModel, Map<ItemKey, Integer>> state = new IdentityHashMap<>();
+        for (BagModel b : bags) state.put(b, new LinkedHashMap<>());
+        for (BagModel b : bags) {
             for (BagEntry e : b.entries) {
                 if (!e.movable() || e.count <= 0) continue;
                 totals.merge(e.key, e.count, Integer::sum);
-                curCount.computeIfAbsent(e.key, k -> new IdentityHashMap<>()).merge(b, e.count, Integer::sum);
+                state.get(b).merge(e.key, e.count, Integer::sum);
             }
         }
         if (totals.isEmpty()) return empty;
 
-        // home(t) = 当前含该物品最多的袋子（平手取袋序最小）
+        // 单一算法：home 归位 + 迭代到不动点。
+        // 反复“按当前摆放算 home -> 按 home 打包”，直到再算一次结果不变（f(T)=T）。
+        // 达到不动点后，整理完再整理就是 0 步，无需第二套算法兜底。
+        Map<BagModel, Map<ItemKey, Integer>> target = null;
+        for (int iter = 0; iter < 8; iter++) {
+            Map<ItemKey, BagModel> home = computeHome(bags, capBase, totals, perByKey, state);
+            target = packByHome(bags, capBase, totals, perByKey, maxStackByKey, home);
+            Map<ItemKey, BagModel> home2 = computeHome(bags, capBase, totals, perByKey, target);
+            if (home.equals(home2)) {
+                return target;
+            }
+            state = target;
+        }
+        return target;   // 未收敛（罕见）：取最后一版，行为仍有界
+    }
+
+    /**
+     * home(t) = 在“已经含有该物品”的袋子里，选**剩余空间最大**的那个
+     * （这样它能把其余副本也收进来，尽量聚成一袋）；平手时取数量最多、再平手取袋序最小。
+     */
+    private Map<ItemKey, BagModel> computeHome(
+            List<BagModel> bags,
+            Map<BagModel, Integer> capBase,
+            Map<ItemKey, Integer> totals,
+            Map<ItemKey, Integer> perByKey,
+            Map<BagModel, Map<ItemKey, Integer>> state) {
+
+        // 每个袋子在 state 下的已用重量
+        Map<BagModel, Integer> used = new IdentityHashMap<>();
+        for (BagModel b : bags) {
+            int w = 0;
+            for (Map.Entry<ItemKey, Integer> en : state.getOrDefault(b, Map.of()).entrySet()) {
+                int per = Math.max(1, perByKey.getOrDefault(en.getKey(), 1));
+                w += en.getValue() * per;
+            }
+            used.put(b, w);
+        }
+
         Map<ItemKey, BagModel> home = new LinkedHashMap<>();
         for (ItemKey key : totals.keySet()) {
-            Map<BagModel, Integer> cc = curCount.getOrDefault(key, Map.of());
-            BagModel best = null;
-            int bestN = -1;
+            int total = totals.getOrDefault(key, 0);
+            int per = Math.max(1, perByKey.getOrDefault(key, 1));
+
+            BagModel absorber = null;   // 能“吸收其余全部副本”的袋子
+            int absorberFree = -1;
+            BagModel majority = null;   // 否则退而取“含得最多”的袋子
+            int majorityN = -1;
+
             for (BagModel b : bags) {
-                int n = cc.getOrDefault(b, 0);
-                if (n > bestN) {
-                    best = b;
-                    bestN = n;
+                int n = state.getOrDefault(b, Map.of()).getOrDefault(key, 0);
+                if (n <= 0) continue;   // 只在“已含该物品”的袋子里选
+                int free = Math.max(0, capBase.get(b) - used.get(b));
+                if (free >= (total - n) * per) {
+                    if (free > absorberFree) {
+                        absorber = b;
+                        absorberFree = free;
+                    }
+                }
+                if (n > majorityN) {
+                    majority = b;
+                    majorityN = n;
                 }
             }
-            home.put(key, best);
-        }
 
-        // 方案B：home 优先 + 固定溢出（少动、聚堆）。
-        Map<BagModel, Map<ItemKey, Integer>> homeTarget =
-                packByHome(bags, capBase, totals, perByKey, maxStackByKey, home);
-
-        // 不动点校验：在结果上重算 home，一致则采纳；否则回退到 ID 规范形（稳定、不倒腾）。
-        if (isFixedPoint(bags, homeTarget, home)) {
-            return homeTarget;
+            if (absorber != null) home.put(key, absorber);
+            else if (majority != null) home.put(key, majority);
+            else home.put(key, bags.get(0));
         }
-        return assignTargetsCanonical(bags, capBase, totals, perByKey, maxStackByKey);
+        return home;
     }
 
     /** home 优先、固定溢出顺序（从 home 起按袋序循环一圈）。 */
@@ -179,75 +218,6 @@ public final class BundlePacker {
         return target;
     }
 
-    /** 在目标摆放上重算 home，与给定 home 一致则为不动点。 */
-    private boolean isFixedPoint(List<BagModel> bags,
-                                 Map<BagModel, Map<ItemKey, Integer>> target,
-                                 Map<ItemKey, BagModel> home) {
-        for (Map.Entry<ItemKey, BagModel> en : home.entrySet()) {
-            BagModel best = null;
-            int bestN = -1;
-            for (BagModel b : bags) {
-                int n = target.getOrDefault(b, Map.of()).getOrDefault(en.getKey(), 0);
-                if (n > bestN) {
-                    best = b;
-                    bestN = n;
-                }
-            }
-            if (best != en.getValue()) return false;
-        }
-        return true;
-    }
-
-    /** 与当前摆放无关的 ID 规范形：按物品 ID 排序 + Worst-Fit。 */
-    private Map<BagModel, Map<ItemKey, Integer>> assignTargetsCanonical(
-            List<BagModel> bags,
-            Map<BagModel, Integer> capBase,
-            Map<ItemKey, Integer> totals,
-            Map<ItemKey, Integer> perByKey,
-            Map<ItemKey, Integer> maxStackByKey) {
-
-        List<Map.Entry<ItemKey, Integer>> totalList = new ArrayList<>(totals.entrySet());
-        totalList.sort(Comparator.comparing(e -> keyId(e.getKey())));
-
-        List<Chunk> chunks = new ArrayList<>();
-        for (Map.Entry<ItemKey, Integer> en : totalList) {
-            ItemKey key = en.getKey();
-            int total = en.getValue();
-            int per = perByKey.getOrDefault(key, 1);
-            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
-            int full = total / max;
-            int rem = total % max;
-            for (int i = 0; i < full; i++) chunks.add(new Chunk(key, max, max * per));
-            if (rem > 0) chunks.add(new Chunk(key, rem, rem * per));
-        }
-        chunks.sort((a, b) -> {
-            int byWeight = Integer.compare(b.weight, a.weight);
-            if (byWeight != 0) return byWeight;
-            return keyId(a.key).compareTo(keyId(b.key));
-        });
-
-        Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
-        Map<BagModel, Integer> cap = new IdentityHashMap<>(capBase);
-        for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
-
-        for (Chunk chunk : chunks) {
-            BagModel best = null;
-            int bestRemaining = -1;
-            for (BagModel b : bags) {
-                int c = cap.get(b);
-                if (c < chunk.weight) continue;
-                if (c > bestRemaining) {
-                    best = b;
-                    bestRemaining = c;
-                }
-            }
-            if (best == null) continue;
-            cap.put(best, cap.get(best) - chunk.weight);
-            target.get(best).merge(chunk.key, chunk.count, Integer::sum);
-        }
-        return target;
-    }
-
     /** 物品的稳定标识（用于与当前摆放无关的排序）。 */
     private static String keyId(ItemKey key) {
         var rep = key.representative();
@@ -275,7 +245,7 @@ public final class BundlePacker {
                     for (BagModel dst : diff.in.keySet()) {
                         if (diff.in.get(dst).getOrDefault(key, 0) <= 0) continue;
                         if (dst.freeWeight() < per) continue;
-                        if (emitFill(src, key, dst, vm, perByKey, moves)) {
+                        if (tryFill(src, key, dst, vm, perByKey, moves, diff)) {
                             moved = true;
                             break;
                         }
@@ -300,7 +270,7 @@ public final class BundlePacker {
                 if (victim == null) continue;
                 BagModel buffer = findBuffer(vm, diff, victim, blocked);
                 if (buffer == null) continue;
-                if (emitFill(blocked, victim.key, buffer, vm, perByKey, moves)) {
+                if (tryFill(blocked, victim.key, buffer, vm, perByKey, moves, diff)) {
                     moved = true;
                     break;
                 }
@@ -309,14 +279,24 @@ public final class BundlePacker {
         }
     }
 
-    private boolean emitFill(BagModel src, ItemKey key, BagModel dst,
-                             InventoryModel vm, Map<ItemKey, Integer> perByKey,
-                             List<PlannedMove> moves) {
+    /**
+     * 尝试一次搬运，但只有当它能严格减小「离目标的差距」时才生成动作。
+     * 这样落子具有单调性，不会来回抖动/超投振荡（避免 256 步死循环）。
+     */
+    private boolean tryFill(BagModel src, ItemKey key, BagModel dst,
+                            InventoryModel vm, Map<ItemKey, Integer> perByKey,
+                            List<PlannedMove> moves, Diff diff) {
         BagEntry se = src.findEntry(key);
         if (se == null || se.count <= 0) return false;
         int per = Math.max(1, perByKey.getOrDefault(key, 1));
         int take = Math.min(se.count, dst.freeWeight() / per);
-        if (take <= 0) return false;   // 目标放不下哪怕 1 个 -> 不生成空动作
+        if (take <= 0) return false;
+
+        int over = diff.out.getOrDefault(src, Map.of()).getOrDefault(key, 0);
+        int need = diff.in.getOrDefault(dst, Map.of()).getOrDefault(key, 0);
+        int delta = (Math.abs(over - take) - over) + (Math.abs(need - take) - need);
+        if (delta >= 0) return false;   // 不下降 -> 拒绝
+
         moves.add(new PlannedMove(nextId++,
                 MoveAction.to(src.invSlot, key, se.count, dst.invSlot)));
         applyExtract(src, key, take, dst);
