@@ -1,6 +1,7 @@
 package betterbundle;
 
 import betterbundle.gui.BundleCategory;
+import betterbundle.gui.BundlePanelInteraction;
 import betterbundle.gui.SortButton;
 import betterbundle.sort.exec.SortStateMachine;
 import net.fabricmc.api.ClientModInitializer;
@@ -14,6 +15,7 @@ public class BetterBundleMod implements ClientModInitializer {
         BundleCategory.registerCategoryItems();
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             SortStateMachine.get().onClientTick();
+            BundlePanelInteraction.onClientTick();
             SortButton.tick();
         });
     }
