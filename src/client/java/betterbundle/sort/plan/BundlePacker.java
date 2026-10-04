@@ -24,6 +24,18 @@ import java.util.Map;
  */
 public final class BundlePacker {
 
+    private static final class Chunk {
+        final ItemKey key;
+        final int count;
+        final int weight;
+
+        Chunk(ItemKey key, int count, int weight) {
+            this.key = key;
+            this.count = count;
+            this.weight = weight;
+        }
+    }
+
     private int nextId;
 
     public PlanResult plan(InventoryModel live) {
@@ -98,143 +110,66 @@ public final class BundlePacker {
         Map<BagModel, Map<ItemKey, Integer>> empty = new IdentityHashMap<>();
         if (bags.isEmpty()) return empty;
 
-        // 总数 + 当前各袋数量
+        // 每种物品的总数
         Map<ItemKey, Integer> totals = new LinkedHashMap<>();
-        Map<BagModel, Map<ItemKey, Integer>> state = new IdentityHashMap<>();
-        for (BagModel b : bags) state.put(b, new LinkedHashMap<>());
         for (BagModel b : bags) {
             for (BagEntry e : b.entries) {
                 if (!e.movable() || e.count <= 0) continue;
                 totals.merge(e.key, e.count, Integer::sum);
-                state.get(b).merge(e.key, e.count, Integer::sum);
             }
         }
         if (totals.isEmpty()) return empty;
 
-        // 单一算法：home 归位 + 迭代到不动点。
-        // 反复“按当前摆放算 home -> 按 home 打包”，直到再算一次结果不变（f(T)=T）。
-        // 达到不动点后，整理完再整理就是 0 步，无需第二套算法兜底。
-        Map<BagModel, Map<ItemKey, Integer>> target = null;
-        for (int iter = 0; iter < 8; iter++) {
-            Map<ItemKey, BagModel> home = computeHome(bags, capBase, totals, perByKey, state);
-            target = packByHome(bags, capBase, totals, perByKey, maxStackByKey, home);
-            Map<ItemKey, BagModel> home2 = computeHome(bags, capBase, totals, perByKey, target);
-            if (home.equals(home2)) {
-                return target;
-            }
-            state = target;
-        }
-        return target;   // 未收敛（罕见）：取最后一版，行为仍有界
+        // 唯一目标：满堆 chunk + Worst-Fit 的规范形（与当前摆放无关 -> 幂等；聚堆/填满优先）。
+        return assignTargetsCanonical(bags, capBase, totals, perByKey, maxStackByKey);
     }
 
-    /**
-     * home(t) = 在“已经含有该物品”的袋子里，选**剩余空间最大**的那个
-     * （这样它能把其余副本也收进来，尽量聚成一袋）；平手时取数量最多、再平手取袋序最小。
-     */
-    private Map<ItemKey, BagModel> computeHome(
+    /** 满堆 chunk（maxStack 个）+ 一个 partial，按重量降序做 Worst-Fit。与当前摆放无关。 */
+    private Map<BagModel, Map<ItemKey, Integer>> assignTargetsCanonical(
             List<BagModel> bags,
             Map<BagModel, Integer> capBase,
             Map<ItemKey, Integer> totals,
             Map<ItemKey, Integer> perByKey,
-            Map<BagModel, Map<ItemKey, Integer>> state) {
+            Map<ItemKey, Integer> maxStackByKey) {
 
-        // 每个袋子在 state 下的已用重量
-        Map<BagModel, Integer> used = new IdentityHashMap<>();
-        for (BagModel b : bags) {
-            int w = 0;
-            for (Map.Entry<ItemKey, Integer> en : state.getOrDefault(b, Map.of()).entrySet()) {
-                int per = Math.max(1, perByKey.getOrDefault(en.getKey(), 1));
-                w += en.getValue() * per;
-            }
-            used.put(b, w);
+        List<Map.Entry<ItemKey, Integer>> totalList = new ArrayList<>(totals.entrySet());
+        totalList.sort(Comparator.comparing(e -> keyId(e.getKey())));
+
+        List<Chunk> chunks = new ArrayList<>();
+        for (Map.Entry<ItemKey, Integer> en : totalList) {
+            ItemKey key = en.getKey();
+            int total = en.getValue();
+            int per = perByKey.getOrDefault(key, 1);
+            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
+            int full = total / max;
+            int rem = total % max;
+            for (int i = 0; i < full; i++) chunks.add(new Chunk(key, max, max * per));
+            if (rem > 0) chunks.add(new Chunk(key, rem, rem * per));
         }
-
-        Map<ItemKey, BagModel> home = new LinkedHashMap<>();
-        for (ItemKey key : totals.keySet()) {
-            int total = totals.getOrDefault(key, 0);
-            int per = Math.max(1, perByKey.getOrDefault(key, 1));
-
-            BagModel absorber = null;   // 持有袋中能“吸收其余全部副本”的
-            int absorberFree = -1;
-            BagModel majority = null;
-            int majorityN = -1;
-
-            for (BagModel b : bags) {
-                int n = state.getOrDefault(b, Map.of()).getOrDefault(key, 0);
-                if (n <= 0) continue;
-                int free = Math.max(0, capBase.get(b) - used.get(b));
-                if (free >= (total - n) * per && free > absorberFree) {
-                    absorber = b;
-                    absorberFree = free;
-                }
-                if (n > majorityN) {
-                    majority = b;
-                    majorityN = n;
-                }
-            }
-
-            if (absorber != null) {
-                home.put(key, absorber);
-                continue;
-            }
-
-            // 没有持有袋能吸收：优先合并进“有空位的非持有袋”（把同类聚成一袋）。
-            BagModel consolidate = null;
-            for (BagModel b : bags) {
-                if (state.getOrDefault(b, Map.of()).getOrDefault(key, 0) > 0) continue;
-                int free = Math.max(0, capBase.get(b) - used.get(b));
-                if (free >= total * per) {
-                    consolidate = b;
-                    break;
-                }
-            }
-            if (consolidate != null) home.put(key, consolidate);
-            else if (majority != null) home.put(key, majority);
-            else home.put(key, bags.get(0));
-        }
-        return home;
-    }
-
-    /** home 优先、固定溢出顺序（从 home 起按袋序循环一圈）。 */
-    private Map<BagModel, Map<ItemKey, Integer>> packByHome(
-            List<BagModel> bags,
-            Map<BagModel, Integer> capBase,
-            Map<ItemKey, Integer> totals,
-            Map<ItemKey, Integer> perByKey,
-            Map<ItemKey, Integer> maxStackByKey,
-            Map<ItemKey, BagModel> home) {
-
-        // 类型顺序：先按“总重量从大到小”（大类型优先占满整袋、聚堆），
-        // 再按 home 袋序、物品 ID（确定性）。
-        List<ItemKey> keys = new ArrayList<>(totals.keySet());
-        keys.sort(Comparator
-                .comparingInt((ItemKey k) -> -(totals.getOrDefault(k, 0)
-                        * Math.max(1, perByKey.getOrDefault(k, 1))))
-                .thenComparingInt(k -> bags.indexOf(home.get(k)))
-                .thenComparing(BundlePacker::keyId));
+        chunks.sort((a, b) -> {
+            int byWeight = Integer.compare(b.weight, a.weight);
+            if (byWeight != 0) return byWeight;
+            return keyId(a.key).compareTo(keyId(b.key));
+        });
 
         Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
         Map<BagModel, Integer> cap = new IdentityHashMap<>(capBase);
         for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
 
-        for (ItemKey key : keys) {
-            int remaining = totals.getOrDefault(key, 0);
-            if (remaining <= 0) continue;
-            int per = Math.max(1, perByKey.getOrDefault(key, 1));
-            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
-
-            BagModel h = home.get(key);
-            int start = h != null ? Math.max(0, bags.indexOf(h)) : 0;
-            for (int i = 0; i < bags.size() && remaining > 0; i++) {
-                BagModel b = bags.get((start + i) % bags.size());
-                int roomByMax = max - target.get(b).getOrDefault(key, 0);
-                int capItems = cap.get(b) / per;
-                int take = Math.min(remaining, Math.min(capItems, roomByMax));
-                if (take <= 0) continue;
-                cap.put(b, cap.get(b) - take * per);
-                target.get(b).merge(key, take, Integer::sum);
-                remaining -= take;
+        for (Chunk chunk : chunks) {
+            BagModel best = null;
+            int bestRemaining = -1;
+            for (BagModel b : bags) {
+                int c = cap.get(b);
+                if (c < chunk.weight) continue;
+                if (c > bestRemaining) {
+                    best = b;
+                    bestRemaining = c;
+                }
             }
+            if (best == null) continue;
+            cap.put(best, cap.get(best) - chunk.weight);
+            target.get(best).merge(chunk.key, chunk.count, Integer::sum);
         }
         return target;
     }
