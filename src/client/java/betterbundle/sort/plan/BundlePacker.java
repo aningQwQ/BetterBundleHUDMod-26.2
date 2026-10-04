@@ -306,16 +306,6 @@ public final class BundlePacker {
         return true;
     }
 
-    private BagModel findReceiver(Diff diff, ItemKey key) {
-        BagModel best = null;
-        for (BagModel b : diff.in.keySet()) {
-            if (diff.in.get(b).getOrDefault(key, 0) <= 0) continue;
-            if (b.freeWeight() <= 0) continue;
-            if (best == null || b.freeWeight() < best.freeWeight()) best = b;
-        }
-        return best;
-    }
-
     /** 缓冲目标：优先“正需要该物品”的袋子，其次空余最大的袋子；只要放得下 >=1 个即可。 */
     private BagModel findBuffer(InventoryModel vm, Diff diff, BagEntry victim, BagModel exclude) {
         int p = Math.max(1, victim.weight / Math.max(1, victim.count));

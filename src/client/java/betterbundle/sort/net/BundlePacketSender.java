@@ -87,15 +87,6 @@ public final class BundlePacketSender {
         }
     }
 
-    /** 把光标上的物品放进指定空槽（熔断时的安全兜底）。 */
-    public static void depositCursor(int slot) {
-        Minecraft client = Minecraft.getInstance();
-        Player player = client.player;
-        ClientPacketListener connection = client.getConnection();
-        if (player == null || connection == null) return;
-        connection.send(click(player.containerMenu.containerId, slot, (byte) 0));
-    }
-
     private static int currentIndexInBundle(ItemStack bagStack, ItemKey key) {
         BundleContents contents = bagStack.get(DataComponents.BUNDLE_CONTENTS);
         if (contents == null) return -1;

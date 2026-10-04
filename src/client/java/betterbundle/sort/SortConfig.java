@@ -16,8 +16,5 @@ public final class SortConfig {
     public static final int MAX_EVAC_DEPTH = 3;
     public static final int MAX_TOTAL_MOVES = 256;
 
-    /** 单次整理最多移动的物品个数（逐件执行，防止规模过大）。 */
-    public static final int MAX_TOTAL_ITEMS = 512;
-
     private SortConfig() {}
 }
