@@ -89,9 +89,13 @@ public final class BundlePacker {
             }
         }
 
-        // 切块：满堆（maxStack 个）+ 一个 partial
+        // 切块：满堆（maxStack 个）+ 一个 partial。
+        // 关键：物品处理顺序固定按物品 ID 排序（与“当前摆放”无关），保证目标是稳定/可复现的。
+        List<Map.Entry<ItemKey, Integer>> totalList = new ArrayList<>(totals.entrySet());
+        totalList.sort(java.util.Comparator.comparing(e -> keyId(e.getKey())));
+
         List<Chunk> chunks = new ArrayList<>();
-        for (Map.Entry<ItemKey, Integer> en : totals.entrySet()) {
+        for (Map.Entry<ItemKey, Integer> en : totalList) {
             ItemKey key = en.getKey();
             int total = en.getValue();
             int per = perByKey.getOrDefault(key, 1);
@@ -105,7 +109,11 @@ public final class BundlePacker {
                 chunks.add(new Chunk(key, rem, rem * per));
             }
         }
-        chunks.sort((a, b) -> Integer.compare(b.weight, a.weight));
+        chunks.sort((a, b) -> {
+            int byWeight = Integer.compare(b.weight, a.weight);
+            if (byWeight != 0) return byWeight;
+            return keyId(a.key).compareTo(keyId(b.key));   // 稳定平手次序
+        });
 
         // 只往非锁定袋子里装；从零开始（承载其它内容的袋子其内容会作为 chunk 被分到别处）。
         List<BagModel> bags = new ArrayList<>();
@@ -126,20 +134,17 @@ public final class BundlePacker {
         Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
         for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
 
-        // Worst-Fit：把 chunk 放进“当前剩余空间最大”的袋子，使各袋水位尽量均衡；
-        // 平手时优先放回已有该物品的袋子（同类聚拢、减少搬运）。
+        // Worst-Fit：把 chunk 放进“当前剩余空间最大”的袋子，使各袋水位尽量均衡。
+        // 不再参考“物品现在在哪个袋子”，保证目标只由物品清单 + 固定袋序决定（可复现、幂等）。
         for (Chunk chunk : chunks) {
             BagModel best = null;
             int bestRemaining = -1;
-            int bestCur = -1;
             for (BagModel b : bags) {
                 int c = cap.get(b);
                 if (c < chunk.weight) continue;
-                int cur = currentCount(b, chunk.key);
-                if (c > bestRemaining || (c == bestRemaining && cur > bestCur)) {
+                if (c > bestRemaining) {
                     best = b;
                     bestRemaining = c;
-                    bestCur = cur;
                 }
             }
             if (best == null) continue; // 装不下（容量不足，保持原位）
@@ -147,6 +152,13 @@ public final class BundlePacker {
             target.get(best).merge(chunk.key, chunk.count, Integer::sum);
         }
         return target;
+    }
+
+    /** 物品的稳定标识（用于与当前摆放无关的排序）。 */
+    private static String keyId(ItemKey key) {
+        var rep = key.representative();
+        return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(rep.getItem())
+                + "#" + net.minecraft.world.item.ItemStack.hashItemAndComponents(rep);
     }
 
     // ---------- 3) 差异 + 落子 ----------
