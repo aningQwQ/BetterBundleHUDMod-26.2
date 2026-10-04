@@ -7,6 +7,7 @@ import betterbundle.sort.model.InventoryModel;
 import betterbundle.sort.model.ItemKey;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -80,44 +81,8 @@ public final class BundlePacker {
             Map<ItemKey, Integer> perByKey,
             Map<ItemKey, Integer> maxStackByKey) {
 
-        // 每种物品的总数
-        Map<ItemKey, Integer> totals = new LinkedHashMap<>();
-        for (BagModel b : vm.bags) {
-            for (BagEntry e : b.entries) {
-                if (!e.movable() || e.count <= 0) continue;
-                totals.merge(e.key, e.count, Integer::sum);
-            }
-        }
-
-        // 切块：满堆（maxStack 个）+ 一个 partial。
-        // 关键：物品处理顺序固定按物品 ID 排序（与“当前摆放”无关），保证目标是稳定/可复现的。
-        List<Map.Entry<ItemKey, Integer>> totalList = new ArrayList<>(totals.entrySet());
-        totalList.sort(java.util.Comparator.comparing(e -> keyId(e.getKey())));
-
-        List<Chunk> chunks = new ArrayList<>();
-        for (Map.Entry<ItemKey, Integer> en : totalList) {
-            ItemKey key = en.getKey();
-            int total = en.getValue();
-            int per = perByKey.getOrDefault(key, 1);
-            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
-            int full = total / max;
-            int rem = total % max;
-            for (int i = 0; i < full; i++) {
-                chunks.add(new Chunk(key, max, max * per));
-            }
-            if (rem > 0) {
-                chunks.add(new Chunk(key, rem, rem * per));
-            }
-        }
-        chunks.sort((a, b) -> {
-            int byWeight = Integer.compare(b.weight, a.weight);
-            if (byWeight != 0) return byWeight;
-            return keyId(a.key).compareTo(keyId(b.key));   // 稳定平手次序
-        });
-
-        // 只往非锁定袋子里装；从零开始（承载其它内容的袋子其内容会作为 chunk 被分到别处）。
         List<BagModel> bags = new ArrayList<>();
-        Map<BagModel, Integer> cap = new IdentityHashMap<>();
+        Map<BagModel, Integer> capBase = new IdentityHashMap<>();
         for (BagModel b : vm.bags) {
             if (b.locked) continue;
             // 内嵌收纳袋等不可动条目仍占用该袋容量，先扣除。
@@ -128,14 +93,143 @@ public final class BundlePacker {
             int c = SortConfig.W_FULL - reserved;
             if (c <= 0) continue;
             bags.add(b);
-            cap.put(b, c);
+            capBase.put(b, c);
         }
 
+        Map<BagModel, Map<ItemKey, Integer>> empty = new IdentityHashMap<>();
+        if (bags.isEmpty()) return empty;
+
+        // 每种物品的总数，以及“当前各袋里有多少”
+        Map<ItemKey, Integer> totals = new LinkedHashMap<>();
+        Map<ItemKey, Map<BagModel, Integer>> curCount = new LinkedHashMap<>();
+        for (BagModel b : vm.bags) {
+            for (BagEntry e : b.entries) {
+                if (!e.movable() || e.count <= 0) continue;
+                totals.merge(e.key, e.count, Integer::sum);
+                curCount.computeIfAbsent(e.key, k -> new IdentityHashMap<>()).merge(b, e.count, Integer::sum);
+            }
+        }
+        if (totals.isEmpty()) return empty;
+
+        // home(t) = 当前含该物品最多的袋子（平手取袋序最小）
+        Map<ItemKey, BagModel> home = new LinkedHashMap<>();
+        for (ItemKey key : totals.keySet()) {
+            Map<BagModel, Integer> cc = curCount.getOrDefault(key, Map.of());
+            BagModel best = null;
+            int bestN = -1;
+            for (BagModel b : bags) {
+                int n = cc.getOrDefault(b, 0);
+                if (n > bestN) {
+                    best = b;
+                    bestN = n;
+                }
+            }
+            home.put(key, best);
+        }
+
+        // 方案B：home 优先 + 固定溢出（少动、聚堆）。
+        Map<BagModel, Map<ItemKey, Integer>> homeTarget =
+                packByHome(bags, capBase, totals, perByKey, maxStackByKey, home);
+
+        // 不动点校验：在结果上重算 home，一致则采纳；否则回退到 ID 规范形（稳定、不倒腾）。
+        if (isFixedPoint(bags, homeTarget, home)) {
+            return homeTarget;
+        }
+        return assignTargetsCanonical(bags, capBase, totals, perByKey, maxStackByKey);
+    }
+
+    /** home 优先、固定溢出顺序（从 home 起按袋序循环一圈）。 */
+    private Map<BagModel, Map<ItemKey, Integer>> packByHome(
+            List<BagModel> bags,
+            Map<BagModel, Integer> capBase,
+            Map<ItemKey, Integer> totals,
+            Map<ItemKey, Integer> perByKey,
+            Map<ItemKey, Integer> maxStackByKey,
+            Map<ItemKey, BagModel> home) {
+
+        // 类型顺序：先按 home 的袋序，再按物品 ID（确定性）
+        List<ItemKey> keys = new ArrayList<>(totals.keySet());
+        keys.sort(Comparator
+                .comparingInt((ItemKey k) -> bags.indexOf(home.get(k)))
+                .thenComparing(BundlePacker::keyId));
+
         Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
+        Map<BagModel, Integer> cap = new IdentityHashMap<>(capBase);
         for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
 
-        // Worst-Fit：把 chunk 放进“当前剩余空间最大”的袋子，使各袋水位尽量均衡。
-        // 不再参考“物品现在在哪个袋子”，保证目标只由物品清单 + 固定袋序决定（可复现、幂等）。
+        for (ItemKey key : keys) {
+            int remaining = totals.getOrDefault(key, 0);
+            if (remaining <= 0) continue;
+            int per = Math.max(1, perByKey.getOrDefault(key, 1));
+            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
+
+            BagModel h = home.get(key);
+            int start = h != null ? Math.max(0, bags.indexOf(h)) : 0;
+            for (int i = 0; i < bags.size() && remaining > 0; i++) {
+                BagModel b = bags.get((start + i) % bags.size());
+                int roomByMax = max - target.get(b).getOrDefault(key, 0);
+                int capItems = cap.get(b) / per;
+                int take = Math.min(remaining, Math.min(capItems, roomByMax));
+                if (take <= 0) continue;
+                cap.put(b, cap.get(b) - take * per);
+                target.get(b).merge(key, take, Integer::sum);
+                remaining -= take;
+            }
+        }
+        return target;
+    }
+
+    /** 在目标摆放上重算 home，与给定 home 一致则为不动点。 */
+    private boolean isFixedPoint(List<BagModel> bags,
+                                 Map<BagModel, Map<ItemKey, Integer>> target,
+                                 Map<ItemKey, BagModel> home) {
+        for (Map.Entry<ItemKey, BagModel> en : home.entrySet()) {
+            BagModel best = null;
+            int bestN = -1;
+            for (BagModel b : bags) {
+                int n = target.getOrDefault(b, Map.of()).getOrDefault(en.getKey(), 0);
+                if (n > bestN) {
+                    best = b;
+                    bestN = n;
+                }
+            }
+            if (best != en.getValue()) return false;
+        }
+        return true;
+    }
+
+    /** 与当前摆放无关的 ID 规范形：按物品 ID 排序 + Worst-Fit。 */
+    private Map<BagModel, Map<ItemKey, Integer>> assignTargetsCanonical(
+            List<BagModel> bags,
+            Map<BagModel, Integer> capBase,
+            Map<ItemKey, Integer> totals,
+            Map<ItemKey, Integer> perByKey,
+            Map<ItemKey, Integer> maxStackByKey) {
+
+        List<Map.Entry<ItemKey, Integer>> totalList = new ArrayList<>(totals.entrySet());
+        totalList.sort(Comparator.comparing(e -> keyId(e.getKey())));
+
+        List<Chunk> chunks = new ArrayList<>();
+        for (Map.Entry<ItemKey, Integer> en : totalList) {
+            ItemKey key = en.getKey();
+            int total = en.getValue();
+            int per = perByKey.getOrDefault(key, 1);
+            int max = Math.max(1, maxStackByKey.getOrDefault(key, 64));
+            int full = total / max;
+            int rem = total % max;
+            for (int i = 0; i < full; i++) chunks.add(new Chunk(key, max, max * per));
+            if (rem > 0) chunks.add(new Chunk(key, rem, rem * per));
+        }
+        chunks.sort((a, b) -> {
+            int byWeight = Integer.compare(b.weight, a.weight);
+            if (byWeight != 0) return byWeight;
+            return keyId(a.key).compareTo(keyId(b.key));
+        });
+
+        Map<BagModel, Map<ItemKey, Integer>> target = new IdentityHashMap<>();
+        Map<BagModel, Integer> cap = new IdentityHashMap<>(capBase);
+        for (BagModel b : bags) target.put(b, new LinkedHashMap<>());
+
         for (Chunk chunk : chunks) {
             BagModel best = null;
             int bestRemaining = -1;
@@ -147,7 +241,7 @@ public final class BundlePacker {
                     bestRemaining = c;
                 }
             }
-            if (best == null) continue; // 装不下（容量不足，保持原位）
+            if (best == null) continue;
             cap.put(best, cap.get(best) - chunk.weight);
             target.get(best).merge(chunk.key, chunk.count, Integer::sum);
         }
