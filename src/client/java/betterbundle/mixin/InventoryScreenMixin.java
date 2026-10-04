@@ -19,11 +19,16 @@ public abstract class InventoryScreenMixin {
     @Inject(method = "extractContents", at = @At("TAIL"))
     private void onExtractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+        Minecraft mc = Minecraft.getInstance();
+        boolean creative = betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen());
+
+        // 创造模式：只绘制“不支持”提示，其余面板内容/按钮一律不画。
         BundlePanelRenderer.render(graphics,
                 self.leftPos,
                 self.topPos,
                 self.imageHeight,
                 mouseX, mouseY);
+        if (creative) return;
 
         // Enlarge the bundle icon for the hovered panel item
         int bundleSlot = BundlePanelRenderer.getHoveredBundleSlot();

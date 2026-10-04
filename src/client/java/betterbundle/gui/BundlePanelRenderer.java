@@ -222,6 +222,12 @@ public final class BundlePanelRenderer {
     // --- render ---
 
     public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
+        Minecraft mc = Minecraft.getInstance();
+        // 创造模式：整个面板不绘制，只显示“不支持”。
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) {
+            renderUnsupported(graphics, leftPos, topPos, imageHeight);
+            return;
+        }
         if (!isEffectivelyVisible()) return;
         List<BundleSlotEntry> bundles = getBundles();
         List<FlatItem> allItems = buildFlatItemList(bundles);
@@ -364,6 +370,21 @@ public final class BundlePanelRenderer {
         graphics.fill(countX - 2, countY, countX + textW + 2, countY + font.lineHeight, 0x30FFFFFF);
         graphics.text(font, countText, countX, countY, 0xFFAAAAAA, false);
 
+    }
+
+    private static void renderUnsupported(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight) {
+        int pw = panelWidth();
+        int panelX = leftPos - pw - 4;
+        int panelY = topPos;
+        int searchH = SEARCH_BAR_HEIGHT + 3;
+        int gridH = PADDING * 2 + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING;
+        int panelHeight = Math.min(imageHeight, searchH + gridH) + 24;
+        graphics.fill(panelX + 16, panelY, panelX + pw, panelY + panelHeight, 0x25101010);
+        Font font = Minecraft.getInstance().font;
+        String msg = "创造模式不支持此功能";
+        int tx = panelX + (pw - font.width(msg)) / 2;
+        int ty = panelY + panelHeight / 2;
+        graphics.text(font, msg, tx, ty, 0xFFFF8080, false);
     }
 
     private static int[] getBundleStats() {
