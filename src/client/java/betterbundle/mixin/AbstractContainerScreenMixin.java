@@ -130,8 +130,7 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private static boolean isInsidePanelBounds(double mx, double my, int leftPos, int topPos, int imageHeight) {
-        // 面板所在横向列（上下不限）：连面板下方空白也覆盖，避免“点击面板空白处”把光标物品丢出。
-        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insideColumn(mx);
+        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insidePanel(mx, my);
     }
 
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
@@ -142,8 +141,9 @@ public abstract class AbstractContainerScreenMixin {
         sweptSlots.clear();
         if (!BundlePanelRenderer.isEffectivelyVisible()) return;
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
-        if (BundlePanelInteraction.isInsidePanel(event.x(), event.y(),
-                self.leftPos, self.topPos, self.imageHeight)) {
+        // 面板整体在容器 GUI 之外：松开点若落在面板内（含空网格/空白）也必须吞掉，
+        // 否则原版 mouseReleased 会按“点击 GUI 外(-999)”丢出光标物品。
+        if (isInsidePanelBounds(event.x(), event.y(), self.leftPos, self.topPos, self.imageHeight)) {
             cir.setReturnValue(true);
         }
     }
