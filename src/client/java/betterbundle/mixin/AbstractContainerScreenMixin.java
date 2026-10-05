@@ -120,15 +120,7 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private static boolean isInsidePanelBounds(double mx, double my, int leftPos, int topPos, int imageHeight) {
-        int pw = BundlePanelRenderer.panelWidth();
-        int panelX = leftPos - pw - 4;
-        int panelY = topPos;
-        int searchH = BundlePanelRenderer.SEARCH_BAR_HEIGHT + 3;
-        int gridH = BundlePanelRenderer.PADDING * 2
-                + BundlePanelRenderer.VISIBLE_ROWS * BundlePanelRenderer.SLOT_SIZE
-                + (BundlePanelRenderer.VISIBLE_ROWS - 1) * BundlePanelRenderer.SLOT_SPACING;
-        int panelH = Math.min(imageHeight, searchH + gridH) + 24;
-        return mx >= panelX && mx <= panelX + pw && my >= panelY && my <= panelY + panelH;
+        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insidePanel(mx, my);
     }
 
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)

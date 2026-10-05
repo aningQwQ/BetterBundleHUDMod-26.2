@@ -29,44 +29,33 @@ public final class BundlePanelInteraction {
 
     private BundlePanelInteraction() {}
 
-    private static int gridX(int leftPos) {
-        int pw = BundlePanelRenderer.panelWidth();
-        int panelX = leftPos - pw - 4;
-        return panelX + BundlePanelRenderer.PADDING
-                + BundlePanelRenderer.CAT_BAR_WIDTH + 2
-                + BundlePanelRenderer.SCROLL_BAR_WIDTH + 2;
-    }
-
-    private static int gridY(int topPos) {
-        return topPos + BundlePanelRenderer.SEARCH_BAR_HEIGHT + 3 + BundlePanelRenderer.PADDING;
-    }
-
     private static BundlePanelRenderer.FlatItem getClickedItem(double mouseX, double mouseY,
                                                                 int leftPos, int topPos) {
         List<BundlePanelRenderer.BundleSlotEntry> bundles = BundlePanelRenderer.getBundles();
         if (bundles.isEmpty()) return null;
 
-        List<BundlePanelRenderer.FlatItem> allItems = BundlePanelRenderer.buildFlatItemList(bundles);
-        if (allItems.isEmpty()) return null;
-
         // Use filtered items to match rendered panel
-        List<BundlePanelRenderer.FlatItem> items = BundlePanelRenderer.filterItems(allItems, BundlePanelRenderer.searchQuery);
+        List<BundlePanelRenderer.FlatItem> items =
+                BundlePanelRenderer.filterItems(BundlePanelRenderer.buildFlatItemList(bundles), BundlePanelRenderer.searchQuery);
         if (items.isEmpty()) return null;
 
-        int gx = gridX(leftPos);
-        int gy = gridY(topPos);
+        PanelLayout lay = BundlePanelRenderer.currentLayout(leftPos, topPos);
+        int relX = (int) mouseX - lay.gridX;
+        int relY = (int) mouseY - lay.gridY;
+        if (relX < 0 || relY < 0) return null;
 
-        int relX = (int) mouseX - gx;
-        int relY = (int) mouseY - gy;
+        int col = relX / PanelLayout.SLOT_PITCH;
+        int row = relY / PanelLayout.SLOT_PITCH;
+        int sx = lay.slotX(col);
+        int sy = lay.slotY(row);
+        // 必须落在格子本体上（排除格子间距）
+        if (mouseX < sx || mouseX >= sx + PanelLayout.SLOT
+                || mouseY < sy || mouseY >= sy + PanelLayout.SLOT) {
+            return null;
+        }
 
-        int col = relX / (BundlePanelRenderer.SLOT_SIZE + BundlePanelRenderer.SLOT_SPACING);
-        int row = relY / (BundlePanelRenderer.SLOT_SIZE + BundlePanelRenderer.SLOT_SPACING);
-
-        if (col < 0 || col >= BundlePanelRenderer.COLUMNS) return null;
-        if (row < 0 || row >= BundlePanelRenderer.VISIBLE_ROWS) return null;
-
-        int flatIndex = (BundlePanelRenderer.getScrollOffset() + row) * BundlePanelRenderer.COLUMNS + col;
-        if (flatIndex >= items.size()) return null;
+        int flatIndex = lay.flatIndex(row, col, items.size());
+        if (flatIndex < 0) return null;
         return items.get(flatIndex);
     }
 
@@ -455,20 +444,12 @@ public final class BundlePanelInteraction {
                                         int leftPos, int topPos, int imageHeight) {
         if (!BundlePanelRenderer.isEffectivelyVisible()) return false;
         if (!isInsidePanel(mouseX, mouseY, leftPos, topPos, imageHeight)) return false;
-        BundlePanelRenderer.scrollBy(scrollDelta > 0 ? -1 : 1);
+        BundlePanelRenderer.scrollBy(scrollDelta > 0 ? -1 : 1, leftPos, topPos, imageHeight);
         return true;
     }
 
     public static boolean isInsidePanel(double mouseX, double mouseY,
                                          int leftPos, int topPos, int imageHeight) {
-        int pw = BundlePanelRenderer.panelWidth();
-        int panelX = leftPos - pw - 4;
-        int gx = gridX(leftPos);
-        if (mouseX < gx || mouseX > panelX + pw - BundlePanelRenderer.PADDING) return false;
-        int pTop = gridY(topPos);
-        int pH = BundlePanelRenderer.VISIBLE_ROWS * BundlePanelRenderer.SLOT_SIZE
-                + (BundlePanelRenderer.VISIBLE_ROWS - 1) * BundlePanelRenderer.SLOT_SPACING;
-        if (mouseY < pTop || mouseY > pTop + pH) return false;
-        return true;
+        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insideGrid(mouseX, mouseY);
     }
 }

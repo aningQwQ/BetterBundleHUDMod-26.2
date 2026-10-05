@@ -23,16 +23,6 @@ import betterbundle.util.BundleContentsHelper;
 
 public final class BundlePanelRenderer {
 
-    public static final int SLOT_SIZE = 18;
-    public static final int COLUMNS = 6;
-    public static final int VISIBLE_ROWS = 8;
-    public static final int SLOT_SPACING = 1;
-    public static final int PADDING = 3;
-    public static final int SCROLL_BAR_WIDTH = 4;
-    public static final int CAT_BUTTON_SIZE = 23;
-    public static final int CAT_BAR_WIDTH = CAT_BUTTON_SIZE;
-    public static final int SEARCH_BAR_HEIGHT = 14;
-
     private static int scrollOffset = 0;
     public static boolean visible = true;
 
@@ -48,21 +38,24 @@ public final class BundlePanelRenderer {
     /** bundleSlot = container slot index (for clickSlot packets) */
     public record BundleSlotEntry(int bundleSlot, ItemStack bundleStack, BundleContents contents) {}
 
-    public static int panelWidth() {
-        return CAT_BAR_WIDTH + 2 + SCROLL_BAR_WIDTH + 2
-                + COLUMNS * (SLOT_SIZE + SLOT_SPACING) - SLOT_SPACING + PADDING * 2;
+    /** 面板的统一布局（渲染、交互命中、排序按钮共用）。 */
+    public static PanelLayout currentLayout(int leftPos, int topPos) {
+        return currentLayout(leftPos, topPos, 0);
+    }
+
+    public static PanelLayout currentLayout(int leftPos, int topPos, int imageHeight) {
+        Minecraft mc = Minecraft.getInstance();
+        List<FlatItem> items = filterItems(buildFlatItemList(getBundles()), searchQuery);
+        return PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
+                currentCategory == BundleCategory.ALL, scrollOffset, mc.font.lineHeight);
     }
 
     public static int getScrollOffset() { return scrollOffset; }
     public static void scrollToTop() { scrollOffset = 0; }
 
-    public static void scrollBy(int delta) {
-        List<BundleSlotEntry> bundles = getBundles();
-        if (bundles.isEmpty()) { scrollOffset = 0; return; }
-        List<FlatItem> items = buildFlatItemList(bundles);
-        int totalRows = (items.size() + COLUMNS - 1) / COLUMNS;
-        int maxScroll = Math.max(0, totalRows - VISIBLE_ROWS);
-        scrollOffset = Math.clamp(scrollOffset + delta, 0, maxScroll);
+    public static void scrollBy(int delta, int leftPos, int topPos, int imageHeight) {
+        PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
+        scrollOffset = Math.clamp(scrollOffset + delta, 0, lay.maxScroll);
     }
 
     public record FlatItem(int bundleSlot, int itemIndex, ItemStack stack) {}
@@ -173,47 +166,22 @@ public final class BundlePanelRenderer {
     }
     public static void toggleVisible() { visible = !visible; }
 
-    // --- category button layout ---
+    // --- hit-test（全部基于唯一布局） ---
 
-    /** Shared button layout: returns Y position of category button i. */
-    private static int catButtonY(int i, int panelY) {
-        return panelY + PADDING - 3 + i * CAT_BAR_WIDTH;
-    }
-
-    public static BundleCategory getCategoryAt(double mouseX, double mouseY, int leftPos, int topPos, int imageHeight) {
-        int pw = panelWidth();
-        int panelX = leftPos - pw - 4;
-        int baseCatX = panelX + PADDING - 10;
-        int panelY = topPos;
-        int searchH = SEARCH_BAR_HEIGHT + 3;
-        int gridH = PADDING * 2 + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING;
-        int panelHeight = Math.min(imageHeight, searchH + gridH) + 24;
-
+    public static BundleCategory getCategoryAt(double mouseX, double mouseY,
+                                               int leftPos, int topPos, int imageHeight) {
+        PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
         BundleCategory[] cats = BundleCategory.values();
         for (int i = 0; i < cats.length; i++) {
-            int by = catButtonY(i, panelY);
-            if (by + CAT_BAR_WIDTH > panelY + panelHeight) break;
-            int bx = baseCatX;
-            int bw = CAT_BAR_WIDTH;
-            if (cats[i] == currentCategory) { bx -= 5; bw += 5; }
-            if (mouseX >= bx && mouseX < bx + bw
-                    && mouseY >= by && mouseY < by + CAT_BAR_WIDTH) {
-                return cats[i];
-            }
+            if (lay.catContains(i, mouseX, mouseY)) return cats[i];
         }
         return null;
     }
 
-    // --- search ---
-
-    public static boolean isInsideSearchBar(double mouseX, double mouseY, int leftPos, int topPos, int imageHeight) {
+    public static boolean isInsideSearchBar(double mouseX, double mouseY,
+                                            int leftPos, int topPos, int imageHeight) {
         if (currentCategory != BundleCategory.ALL) return false; // Only ALL mode has interactive search
-        int pw = panelWidth();
-        int panelX = leftPos - pw - 4;
-        int sbx = panelX + PADDING + CAT_BAR_WIDTH + 2;
-        int sby = topPos + 2;
-        int sbw = pw - PADDING - CAT_BAR_WIDTH - 2 - PADDING - 10;
-        return mouseX >= sbx && mouseX <= sbx + sbw && mouseY >= sby && mouseY <= sby + SEARCH_BAR_HEIGHT;
+        return currentLayout(leftPos, topPos, imageHeight).insideSearch(mouseX, mouseY);
     }
 
     public static void onCharTyped(char c) {
@@ -234,6 +202,13 @@ public final class BundlePanelRenderer {
 
     // --- render ---
 
+    private static void border(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
+        g.fill(x, y, x + w, y + 1, color);
+        g.fill(x, y + h - 1, x + w, y + h, color);
+        g.fill(x, y, x + 1, y + h, color);
+        g.fill(x + w - 1, y, x + w, y + h, color);
+    }
+
     public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
         // 创造模式：整个面板不绘制（仅开关打开时显示“不支持”）。
@@ -242,161 +217,120 @@ public final class BundlePanelRenderer {
             return;
         }
         if (!isEffectivelyVisible()) return;
-        List<BundleSlotEntry> bundles = getBundles();
-        List<FlatItem> allItems = buildFlatItemList(bundles);
-        List<FlatItem> items = filterItems(allItems, searchQuery);
-        if (items.isEmpty()) scrollOffset = 0;
 
-        int pw = panelWidth();
-        int panelX = leftPos - pw - 4;
-        int panelY = topPos;
+        Font font = mc.font;
+        List<BundleSlotEntry> bundles = getBundles();
+        List<FlatItem> items = filterItems(buildFlatItemList(bundles), searchQuery);
+        PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
+                currentCategory == BundleCategory.ALL, scrollOffset, font.lineHeight);
+        scrollOffset = lay.startRow;
 
         boolean isAllMode = currentCategory == BundleCategory.ALL;
-        int searchH = SEARCH_BAR_HEIGHT + 3;
 
-        int gridH = PADDING * 2 + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING;
-        int panelHeight = Math.min(imageHeight, searchH + gridH) + 24;
+        // 面板底 + 边框（尺寸=实际内容，不再有魔数溢出）
+        graphics.fill(lay.panelX, lay.panelY, lay.panelX + lay.panelW, lay.panelY + lay.panelH, 0x40101010);
+        border(graphics, lay.panelX, lay.panelY, lay.panelW, lay.panelH, 0x60FFFFFF);
 
-        // Panel background (left edge inset 16px)
-        graphics.fill(panelX + 16, panelY, panelX + pw, panelY + panelHeight, 0x25101010);
-
-        Minecraft client = Minecraft.getInstance();
-        Font font = client.font;
-
-        int totalRows = Math.max(1, (items.size() + COLUMNS - 1) / COLUMNS);
-        int maxScroll = Math.max(0, totalRows - VISIBLE_ROWS);
-        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
-
-        // Category buttons always at panel top (no searchH offset)
-        int catTop = panelY;
-        // Grid starts below search bar
-        int gridTop = panelY + searchH;
-        int gridContentH = panelHeight - searchH;
-
-        // Category buttons
+        // 分类按钮（在面板内部）
         BundleCategory[] cats = BundleCategory.values();
-        int catX = panelX + PADDING - 10;
-        int catAreaH = panelHeight - PADDING * 2;
-
         for (int i = 0; i < cats.length; i++) {
-            int by = catButtonY(i, catTop);
-            if (by + CAT_BAR_WIDTH > catTop + panelHeight) break;
-
+            if (!lay.catButtonFits(i)) break;
+            int by = lay.catButtonY(i);
             boolean selected = cats[i] == currentCategory;
-            int bx = catX;
-            int bw = CAT_BAR_WIDTH;
-            if (selected) { bx -= 5; bw += 5; }
-            boolean hovered = mouseX >= bx && mouseX < bx + bw
-                    && mouseY >= by && mouseY < by + CAT_BAR_WIDTH;
-            int bg = selected ? 0x25101010 : (hovered ? 0x40FFFFFF : 0x30FFFFFF);
-            graphics.fill(bx, by, bx + bw, by + CAT_BAR_WIDTH, bg);
-            int iconOff = (CAT_BAR_WIDTH - 16) / 2;
-            graphics.item(cats[i].getIcon(), bx + iconOff, by + iconOff);
+            boolean hovered = lay.catContains(i, mouseX, mouseY);
+            int bg = selected ? 0x60000000 : (hovered ? 0x40FFFFFF : 0x30FFFFFF);
+            graphics.fill(lay.catX, by, lay.catX + lay.catW, by + lay.catW, bg);
+            if (selected) border(graphics, lay.catX, by, lay.catW, lay.catW, 0x90FFFFFF);
+            int iconOff = (lay.catW - 16) / 2;
+            graphics.item(cats[i].getIcon(), lay.catX + iconOff, by + iconOff);
         }
 
-        // Scroll bar
-        int sbX = panelX + PADDING + CAT_BAR_WIDTH + 2;
-        int sbY = gridTop + PADDING;
-        int sbH = gridContentH - PADDING * 2;
-
-        graphics.fill(sbX, sbY, sbX + SCROLL_BAR_WIDTH, sbY + sbH, 0x30FFFFFF);
-        if (maxScroll > 0) {
-            int thumbH = Math.max(12, sbH * VISIBLE_ROWS / totalRows);
-            int thumbY = sbY + (sbH - thumbH) * scrollOffset / maxScroll;
-            graphics.fill(sbX, thumbY, sbX + SCROLL_BAR_WIDTH, thumbY + thumbH, 0x50FFFFFF);
+        // 滚动条
+        graphics.fill(lay.scrollX, lay.scrollY, lay.scrollX + lay.scrollW, lay.scrollY + lay.scrollH, 0x30FFFFFF);
+        if (lay.maxScroll > 0) {
+            int thumbH = Math.max(12, lay.scrollH * lay.visibleRows / lay.totalRows);
+            int thumbY = lay.scrollY + (lay.scrollH - thumbH) * lay.startRow / lay.maxScroll;
+            graphics.fill(lay.scrollX, thumbY, lay.scrollX + lay.scrollW, thumbY + thumbH, 0x60FFFFFF);
         }
 
-        // Item grid
-        int gridX = sbX + SCROLL_BAR_WIDTH + 2;
-        int gridY = gridTop + PADDING;
-        int startRow = scrollOffset;
+        // 物品网格（动态列/行）
         int hoveredFlatIndex = -1;
+        for (int row = 0; row < lay.visibleRows; row++) {
+            for (int col = 0; col < lay.columns; col++) {
+                int flatIndex = lay.flatIndex(row, col, items.size());
+                if (flatIndex < 0) continue;
+                int sx = lay.slotX(col);
+                int sy = lay.slotY(row);
 
-        for (int row = 0; row < VISIBLE_ROWS; row++) {
-            for (int col = 0; col < COLUMNS; col++) {
-                int flatIndex = (startRow + row) * COLUMNS + col;
-                if (flatIndex >= items.size()) break;
-                int sx = gridX + col * (SLOT_SIZE + SLOT_SPACING);
-                int sy = gridY + row * (SLOT_SIZE + SLOT_SPACING);
-
-                graphics.fill(sx, sy, sx + SLOT_SIZE, sy + SLOT_SIZE, 0x40FFFFFF);
-                graphics.fill(sx + 1, sy + 1, sx + SLOT_SIZE - 1, sy + SLOT_SIZE - 1, 0x50FFFFFF);
+                graphics.fill(sx, sy, sx + PanelLayout.SLOT, sy + PanelLayout.SLOT, 0x40FFFFFF);
+                graphics.fill(sx + 1, sy + 1, sx + PanelLayout.SLOT - 1, sy + PanelLayout.SLOT - 1, 0x50FFFFFF);
 
                 FlatItem fi = items.get(flatIndex);
                 graphics.item(fi.stack(), sx + 1, sy + 1);
                 graphics.itemDecorations(font, fi.stack(), sx + 1, sy + 1);
 
-                if (mouseX >= sx && mouseX < sx + SLOT_SIZE && mouseY >= sy && mouseY < sy + SLOT_SIZE) {
+                if (mouseX >= sx && mouseX < sx + PanelLayout.SLOT
+                        && mouseY >= sy && mouseY < sy + PanelLayout.SLOT) {
                     hoveredFlatIndex = flatIndex;
                 }
             }
         }
 
         if (hoveredFlatIndex >= 0) {
-            int hRow = hoveredFlatIndex / COLUMNS - startRow;
-            int hCol = hoveredFlatIndex % COLUMNS;
-            int hx = gridX + hCol * (SLOT_SIZE + SLOT_SPACING);
-            int hy = gridY + hRow * (SLOT_SIZE + SLOT_SPACING);
-            graphics.fill(hx, hy, hx + SLOT_SIZE, hy + SLOT_SIZE, 0x60FFFFFF);
+            int hRow = hoveredFlatIndex / lay.columns - lay.startRow;
+            int hCol = hoveredFlatIndex % lay.columns;
+            int hx = lay.slotX(hCol);
+            int hy = lay.slotY(hRow);
+            graphics.fill(hx, hy, hx + PanelLayout.SLOT, hy + PanelLayout.SLOT, 0x60FFFFFF);
             graphics.setTooltipForNextFrame(font, items.get(hoveredFlatIndex).stack(), mouseX, mouseY);
             hoveredBundleSlot = items.get(hoveredFlatIndex).bundleSlot();
         } else {
             hoveredBundleSlot = -1;
         }
 
-        // Search bar (always visible, only interactive in ALL mode)
+        // 搜索栏（始终绘制，仅 ALL 可交互）
         {
-            int sbx = panelX + PADDING + CAT_BAR_WIDTH + 2;
-            int sby = panelY + 2;
-            int sbw = pw - PADDING - CAT_BAR_WIDTH - 2 - PADDING - 10;
             boolean active = isAllMode && searchFocused;
             int bg = isAllMode ? (active ? 0x60000000 : 0x40FFFFFF) : 0x30FFFFFF;
-            graphics.fill(sbx, sby, sbx + sbw, sby + SEARCH_BAR_HEIGHT, bg);
-            if (active) graphics.fill(sbx + 1, sby + 1, sbx + sbw - 1, sby + SEARCH_BAR_HEIGHT - 1, 0x50FFFFFF);
-            int textY = sby + (SEARCH_BAR_HEIGHT - font.lineHeight) / 2;
+            graphics.fill(lay.searchX, lay.searchY, lay.searchX + lay.searchW, lay.searchY + lay.searchH, bg);
+            if (active) graphics.fill(lay.searchX + 1, lay.searchY + 1, lay.searchX + lay.searchW - 1, lay.searchY + lay.searchH - 1, 0x50FFFFFF);
+            int textY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
             if (isAllMode && searchQuery.isEmpty() && !searchFocused) {
-                graphics.text(font, "Search...", sbx + 3, textY, 0xFF666666, false);
+                graphics.text(font, "Search...", lay.searchX + 3, textY, 0xFF666666, false);
             } else if (isAllMode && !searchQuery.isEmpty()) {
-                graphics.text(font, searchQuery, sbx + 3, textY, 0xFFFFFFFF, false);
+                graphics.text(font, searchQuery, lay.searchX + 3, textY, 0xFFFFFFFF, false);
                 searchCursorTick = (searchCursorTick + 1) % 40;
                 if (searchFocused && searchCursorTick < 20) {
-                    int cursorX = sbx + 3 + font.width(searchQuery);
+                    int cursorX = lay.searchX + 3 + font.width(searchQuery);
                     graphics.fill(cursorX, textY, cursorX + 1, textY + font.lineHeight, 0xFFFFFFFF);
                 }
             }
         }
 
-        // Category title (on top of search bar)
+        // 非 ALL：在搜索栏位置显示分类标题
         if (currentCategory != BundleCategory.ALL) {
             String label = currentCategory.getDisplayName();
-            int catTextX = panelX + PADDING + CAT_BAR_WIDTH + 2 + 3;
-            int catTextY = panelY + 2 + (SEARCH_BAR_HEIGHT - font.lineHeight) / 2;
-            graphics.text(font, label, catTextX, catTextY, 0xFFCCCCCC, false);
+            int catTextY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
+            graphics.text(font, label, lay.searchX + 3, catTextY, 0xFFCCCCCC, false);
         }
 
-        // Bundle count display (bottom-right of grid)
+        // 容量显示（网格下方右对齐）
         int[] stats = getBundleStats();
         String countText = stats[0] + "/" + stats[1];
         int textW = font.width(countText);
-        int countX = gridX + COLUMNS * (SLOT_SIZE + SLOT_SPACING) - SLOT_SPACING - textW;
-        int countY = gridY + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING + 7;
-        graphics.fill(countX - 2, countY, countX + textW + 2, countY + font.lineHeight, 0x30FFFFFF);
-        graphics.text(font, countText, countX, countY, 0xFFAAAAAA, false);
-
+        int countX = lay.gridX + lay.gridW - textW;
+        graphics.fill(countX - 2, lay.countY, countX + textW + 2, lay.countY + font.lineHeight, 0x30FFFFFF);
+        graphics.text(font, countText, countX, lay.countY, 0xFFAAAAAA, false);
     }
 
     private static void renderUnsupported(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight) {
-        int pw = panelWidth();
-        int panelX = leftPos - pw - 4;
-        int panelY = topPos;
-        int searchH = SEARCH_BAR_HEIGHT + 3;
-        int gridH = PADDING * 2 + VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_SPACING;
-        int panelHeight = Math.min(imageHeight, searchH + gridH) + 24;
-        graphics.fill(panelX + 16, panelY, panelX + pw, panelY + panelHeight, 0x25101010);
         Font font = Minecraft.getInstance().font;
+        PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, 0, true, 0, font.lineHeight);
+        graphics.fill(lay.panelX, lay.panelY, lay.panelX + lay.panelW, lay.panelY + lay.panelH, 0x40101010);
+        border(graphics, lay.panelX, lay.panelY, lay.panelW, lay.panelH, 0x60FFFFFF);
         String msg = "创造模式不支持此功能";
-        int tx = panelX + (pw - font.width(msg)) / 2;
-        int ty = panelY + panelHeight / 2;
+        int tx = lay.panelX + (lay.panelW - font.width(msg)) / 2;
+        int ty = lay.panelY + lay.panelH / 2;
         graphics.text(font, msg, tx, ty, 0xFFFF8080, false);
     }
 
