@@ -19,6 +19,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+import betterbundle.config.BetterBundleConfig;
+import betterbundle.config.ModConfig;
 import betterbundle.util.BundleContentsHelper;
 
 public final class BundlePanelRenderer {
@@ -47,7 +49,13 @@ public final class BundlePanelRenderer {
         Minecraft mc = Minecraft.getInstance();
         List<FlatItem> items = filterItems(buildFlatItemList(getBundles()), searchQuery);
         return PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
-                currentCategory == BundleCategory.ALL, scrollOffset, mc.font.lineHeight);
+                effectiveCategory() == BundleCategory.ALL, scrollOffset, mc.font.lineHeight,
+                ModConfig.get().showCategoryBar);
+    }
+
+    /** 关闭分类栏时，分类一律按“全部”处理（否则会被非 ALL 分类过滤掉内容）。 */
+    private static BundleCategory effectiveCategory() {
+        return ModConfig.get().showCategoryBar ? currentCategory : BundleCategory.ALL;
     }
 
     public static int getScrollOffset() { return scrollOffset; }
@@ -56,6 +64,11 @@ public final class BundlePanelRenderer {
     public static void scrollBy(int delta, int leftPos, int topPos, int imageHeight) {
         PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
         scrollOffset = Math.clamp(scrollOffset + delta, 0, lay.maxScroll);
+    }
+
+    public static void setScrollOffset(int value, int leftPos, int topPos, int imageHeight) {
+        PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
+        scrollOffset = Math.clamp(value, 0, lay.maxScroll);
     }
 
     public record FlatItem(int bundleSlot, int itemIndex, ItemStack stack) {}
@@ -82,9 +95,10 @@ public final class BundlePanelRenderer {
 
     public static List<FlatItem> filterItems(List<FlatItem> items, String query) {
         List<FlatItem> filtered = new ArrayList<>();
+        BundleCategory cat = effectiveCategory();
         for (FlatItem fi : items) {
             String key = BuiltInRegistries.ITEM.getKey(fi.stack().getItem()).toString();
-            if (currentCategory.matches(key)) filtered.add(fi);
+            if (cat.matches(key)) filtered.add(fi);
         }
         if (query.isEmpty()) return filtered;
         String q = query.toLowerCase(Locale.ROOT);
@@ -164,12 +178,18 @@ public final class BundlePanelRenderer {
         if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) return false;
         return visible && !isRecipeBookOpen();
     }
-    public static void toggleVisible() { visible = !visible; }
+    public static void toggleVisible() {
+        visible = !visible;
+        if (ModConfig.get().panelVisibility == BetterBundleConfig.PanelVisibility.REMEMBER_LAST) {
+            ModConfig.rememberVisible(visible);
+        }
+    }
 
     // --- hit-test（全部基于唯一布局） ---
 
     public static BundleCategory getCategoryAt(double mouseX, double mouseY,
                                                int leftPos, int topPos, int imageHeight) {
+        if (!ModConfig.get().showCategoryBar) return null;
         PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
         BundleCategory[] cats = BundleCategory.values();
         for (int i = 0; i < cats.length; i++) {
@@ -221,34 +241,38 @@ public final class BundlePanelRenderer {
         Font font = mc.font;
         List<BundleSlotEntry> bundles = getBundles();
         List<FlatItem> items = filterItems(buildFlatItemList(bundles), searchQuery);
+        boolean showCat = ModConfig.get().showCategoryBar;
+        BundleCategory eff = effectiveCategory();
         PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
-                currentCategory == BundleCategory.ALL, scrollOffset, font.lineHeight);
+                eff == BundleCategory.ALL, scrollOffset, font.lineHeight, showCat);
         scrollOffset = lay.startRow;
 
-        boolean isAllMode = currentCategory == BundleCategory.ALL;
+        boolean isAllMode = eff == BundleCategory.ALL;
 
         // 面板底 + 边框（尺寸=实际内容，不再有魔数溢出）
         graphics.fill(lay.panelX, lay.panelY, lay.panelX + lay.panelW, lay.panelY + lay.panelH, 0x40101010);
         border(graphics, lay.panelX, lay.panelY, lay.panelW, lay.panelH, 0x60FFFFFF);
 
-        // 分类按钮（在面板内部）
-        BundleCategory[] cats = BundleCategory.values();
-        for (int i = 0; i < cats.length; i++) {
-            if (!lay.catButtonFits(i)) break;
-            int by = lay.catButtonY(i);
-            boolean selected = cats[i] == currentCategory;
-            boolean hovered = lay.catContains(i, mouseX, mouseY);
-            int bg = selected ? 0x60000000 : (hovered ? 0x40FFFFFF : 0x30FFFFFF);
-            graphics.fill(lay.catX, by, lay.catX + lay.catW, by + lay.catW, bg);
-            if (selected) border(graphics, lay.catX, by, lay.catW, lay.catW, 0x90FFFFFF);
-            int iconOff = (lay.catW - 16) / 2;
-            graphics.item(cats[i].getIcon(), lay.catX + iconOff, by + iconOff);
+        // 分类按钮（在面板内部；配置关闭则不绘制）
+        if (showCat) {
+            BundleCategory[] cats = BundleCategory.values();
+            for (int i = 0; i < cats.length; i++) {
+                if (!lay.catButtonFits(i)) break;
+                int by = lay.catButtonY(i);
+                boolean selected = cats[i] == currentCategory;
+                boolean hovered = lay.catContains(i, mouseX, mouseY);
+                int bg = selected ? 0x60000000 : (hovered ? 0x40FFFFFF : 0x30FFFFFF);
+                graphics.fill(lay.catX, by, lay.catX + lay.catW, by + lay.catW, bg);
+                if (selected) border(graphics, lay.catX, by, lay.catW, lay.catW, 0x90FFFFFF);
+                int iconOff = (lay.catW - 16) / 2;
+                graphics.item(cats[i].getIcon(), lay.catX + iconOff, by + iconOff);
+            }
         }
 
         // 滚动条
         graphics.fill(lay.scrollX, lay.scrollY, lay.scrollX + lay.scrollW, lay.scrollY + lay.scrollH, 0x30FFFFFF);
         if (lay.maxScroll > 0) {
-            int thumbH = Math.max(12, lay.scrollH * lay.visibleRows / lay.totalRows);
+            int thumbH = lay.thumbHeight();
             int thumbY = lay.scrollY + (lay.scrollH - thumbH) * lay.startRow / lay.maxScroll;
             graphics.fill(lay.scrollX, thumbY, lay.scrollX + lay.scrollW, thumbY + thumbH, 0x60FFFFFF);
         }
@@ -308,7 +332,7 @@ public final class BundlePanelRenderer {
         }
 
         // 非 ALL：在搜索栏位置显示分类标题
-        if (currentCategory != BundleCategory.ALL) {
+        if (eff != BundleCategory.ALL) {
             String label = currentCategory.getDisplayName();
             int catTextY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
             graphics.text(font, label, lay.searchX + 3, catTextY, 0xFFCCCCCC, false);
@@ -325,7 +349,8 @@ public final class BundlePanelRenderer {
 
     private static void renderUnsupported(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight) {
         Font font = Minecraft.getInstance().font;
-        PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, 0, true, 0, font.lineHeight);
+        PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, 0, true, 0, font.lineHeight,
+                ModConfig.get().showCategoryBar);
         graphics.fill(lay.panelX, lay.panelY, lay.panelX + lay.panelW, lay.panelY + lay.panelH, 0x40101010);
         border(graphics, lay.panelX, lay.panelY, lay.panelW, lay.panelH, 0x60FFFFFF);
         String msg = "创造模式不支持此功能";

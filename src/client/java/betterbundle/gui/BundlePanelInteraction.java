@@ -452,4 +452,43 @@ public final class BundlePanelInteraction {
                                          int leftPos, int topPos, int imageHeight) {
         return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insideGrid(mouseX, mouseY);
     }
+
+    // ---- 滚动条拖动 ----
+
+    private static boolean scrollbarDragging;
+
+    public static boolean isScrollbarDragging() { return scrollbarDragging; }
+
+    /** 按下滚动条：命中则开始拖动并把滑块移到鼠标处。 */
+    public static boolean handleScrollbarClick(double mouseX, double mouseY,
+                                               int leftPos, int topPos, int imageHeight) {
+        if (!BundlePanelRenderer.isEffectivelyVisible()) return false;
+        PanelLayout lay = BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight);
+        if (lay.maxScroll <= 0) return false;
+        // 命中区左右各放宽 2px，便于抓 4px 的细条
+        if (mouseX < lay.scrollX - 2 || mouseX > lay.scrollX + lay.scrollW + 2) return false;
+        if (mouseY < lay.scrollY || mouseY > lay.scrollY + lay.scrollH) return false;
+        scrollbarDragging = true;
+        BundlePanelRenderer.setScrollOffset(scrollFromMouse(lay, mouseY), leftPos, topPos, imageHeight);
+        return true;
+    }
+
+    public static boolean handleScrollbarDrag(double mouseX, double mouseY,
+                                              int leftPos, int topPos, int imageHeight) {
+        if (!scrollbarDragging) return false;
+        PanelLayout lay = BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight);
+        BundlePanelRenderer.setScrollOffset(scrollFromMouse(lay, mouseY), leftPos, topPos, imageHeight);
+        return true;
+    }
+
+    public static void stopScrollbarDrag() { scrollbarDragging = false; }
+
+    private static int scrollFromMouse(PanelLayout lay, double mouseY) {
+        int thumbH = lay.thumbHeight();
+        int trackRange = lay.scrollH - thumbH;
+        if (trackRange <= 0) return 0;
+        double desired = mouseY - lay.scrollY - thumbH / 2.0;
+        desired = Math.max(0, Math.min(trackRange, desired));
+        return (int) Math.round(desired / trackRange * lay.maxScroll);
+    }
 }

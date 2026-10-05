@@ -34,6 +34,11 @@ public final class SortStateMachine {
 
     private static final SortStateMachine INSTANCE = new SortStateMachine();
 
+    /** 运行时读取用户配置（高级选项：动作间隔 / 确认超时 / 单次动作上限）。 */
+    private static betterbundle.config.BetterBundleConfig cfg() {
+        return betterbundle.config.ModConfig.get();
+    }
+
     private final Random random = new Random();
     private final List<PlannedMove> ordered = new ArrayList<>();
     private final Deque<MoveAction> history = new ArrayDeque<>();
@@ -90,7 +95,7 @@ public final class SortStateMachine {
 
         // 用「动作次数」衡量工作量：每个动作成本固定（发包+确认+节流），
         // 与它搬运多少物品无关。避免用“整叠数量之和”这种被放大的假指标误拒。
-        if (plan.moves().size() > SortConfig.MAX_TOTAL_MOVES) return "操作次数过多，请分批整理";
+        if (plan.moves().size() > cfg().maxTotalMoves) return "操作次数过多，请分批整理";
 
         ordered.clear();
         ordered.addAll(plan.moves());
@@ -178,10 +183,10 @@ public final class SortStateMachine {
             }
             clearExpectation();
             actionIndex++;
-            delayTicks = SortConfig.MIN_DELAY_TICKS
-                    + random.nextInt(SortConfig.MAX_DELAY_TICKS - SortConfig.MIN_DELAY_TICKS + 1);
+            delayTicks = cfg().minDelayTicks
+                    + random.nextInt(Math.max(1, cfg().maxDelayTicks - cfg().minDelayTicks + 1));
             state = State.READY;
-        } else if (waitTicks > SortConfig.CONFIRM_TIMEOUT_TICKS) {
+        } else if (waitTicks > cfg().confirmTimeoutTicks) {
             clearExpectation();
             circuitBreak("服务端 1s 未确认");
         }
@@ -223,9 +228,10 @@ public final class SortStateMachine {
         if (isConfirmed()) {
             clearExpectation();
             rollbackPending = null;
-            delayTicks = SortConfig.MIN_DELAY_TICKS + random.nextInt(3);
+            delayTicks = cfg().minDelayTicks
+                    + random.nextInt(Math.max(1, Math.min(3, cfg().maxDelayTicks - cfg().minDelayTicks + 1)));
             state = State.ROLLBACK_PREPARE;
-        } else if (waitTicks > SortConfig.CONFIRM_TIMEOUT_TICKS) {
+        } else if (waitTicks > cfg().confirmTimeoutTicks) {
             clearExpectation();
             rollbackPending = null;
             delayTicks = 0;

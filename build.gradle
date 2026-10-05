@@ -8,6 +8,14 @@ group = project.maven_group
 
 repositories {
     mavenCentral()
+    maven {
+        name = 'TerraformersMC'
+        url = 'https://maven.terraformersmc.com/releases/'
+    }
+    maven {
+        name = 'Cloth Config'
+        url = 'https://maven.shedaniel.me/'
+    }
 }
 
 configurations {
@@ -33,6 +41,15 @@ dependencies {
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+    // 配置界面（Cloth Config / AutoConfig）
+    implementation("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+        exclude(group: "net.fabricmc.fabric-api")
+    }
+    // ModMenu 配置入口（可选依赖）
+    implementation("com.terraformersmc:modmenu:${project.modmenu_version}") {
+        exclude(group: "net.fabricmc.fabric-api")
+    }
 
     embed 'com.belerweb:pinyin4j:2.5.1'
 }

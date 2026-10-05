@@ -11,6 +11,9 @@
     "entrypoints": {
         "client": [
             "betterbundle.BetterBundleMod"
+        ],
+        "modmenu": [
+            "betterbundle.config.ModMenuIntegration"
         ]
     },
     "accessWidener": "better-bundle.accesswidener",
@@ -23,6 +26,10 @@
     "depends": {
         "fabricloader": ">=0.19.3",
         "minecraft": ">=26.2",
-        "java": ">=25"
+        "java": ">=25",
+        "cloth-config": ">=26.2.155"
+    },
+    "suggests": {
+        "modmenu": "*"
     }
 }

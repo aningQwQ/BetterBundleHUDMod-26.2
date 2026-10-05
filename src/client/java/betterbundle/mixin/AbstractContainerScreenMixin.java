@@ -42,6 +42,13 @@ public abstract class AbstractContainerScreenMixin {
         // 玩家任意输入 → 立即中止整理（不回滚，D4）
         SortStateMachine.get().abortByUser();
 
+        // 滚动条拖动：按下即抓取
+        if (BundlePanelInteraction.handleScrollbarClick(event.x(), event.y(),
+                self.leftPos, self.topPos, self.imageHeight)) {
+            cir.setReturnValue(true);
+            return;
+        }
+
         // Bulk-insert: space+left anywhere starts the sweep.
         if (event.button() == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
             BundlePanelInteraction.startBulkInsert();
@@ -126,6 +133,7 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
     private void onMouseReleased(MouseButtonEvent event, CallbackInfoReturnable<Boolean> cir) {
         BundlePanelInteraction.stopBulkInsert();
+        BundlePanelInteraction.stopScrollbarDrag();
         sweeping = false;
         sweptSlots.clear();
         if (!BundlePanelRenderer.isEffectivelyVisible()) return;
@@ -155,6 +163,15 @@ public abstract class AbstractContainerScreenMixin {
     private void onMouseDragged(MouseButtonEvent event, double dx, double dy,
                                  CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
+        AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
+
+        // 滚动条拖动优先
+        if (BundlePanelInteraction.handleScrollbarDrag(event.x(), event.y(),
+                self.leftPos, self.topPos, self.imageHeight)) {
+            cir.setReturnValue(true);
+            return;
+        }
+
         if (!sweeping) return;
         if (!isSpaceDown()) {
             BundlePanelInteraction.stopBulkInsert();
@@ -163,7 +180,6 @@ public abstract class AbstractContainerScreenMixin {
             return;
         }
 
-        AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         double mx = event.x();
         double my = event.y();
         sweepEnqueue(self, sweepLastX, sweepLastY, mx, my);

@@ -210,7 +210,7 @@ public final class BundlePacker {
                          List<PlannedMove> moves) {
         java.util.Set<String> seen = new java.util.HashSet<>();
         int guard = 0;
-        while (guard++ < 512 && moves.size() < SortConfig.MAX_TOTAL_MOVES) {
+        while (guard++ < 512 && moves.size() < betterbundle.config.ModConfig.get().maxTotalMoves) {
             Diff diff = computeDiff(vm, target);
             if (diff.out.isEmpty() && diff.in.isEmpty()) return;
             if (!seen.add(stateSig(vm))) return;   // 状态重复 -> 防环，停止

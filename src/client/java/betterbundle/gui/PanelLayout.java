@@ -30,6 +30,7 @@ public final class PanelLayout {
     public static final int SORT_H = 12;
 
     public final int panelX, panelY, panelW, panelH;
+    public final boolean showCategoryBar;
     public final int columns, visibleRows, totalRows, startRow, maxScroll;
     public final int catX, catY, catW;
     public final int searchX, searchY, searchW, searchH;
@@ -39,7 +40,7 @@ public final class PanelLayout {
     public final int sortX, sortY, sortW, sortH;
     public final int lineHeight;
 
-    private PanelLayout(int panelX, int panelY, int panelW, int panelH,
+    private PanelLayout(int panelX, int panelY, int panelW, int panelH, boolean showCategoryBar,
                         int columns, int visibleRows, int totalRows, int startRow, int maxScroll,
                         int catX, int catY, int catW,
                         int searchX, int searchY, int searchW, int searchH,
@@ -47,6 +48,7 @@ public final class PanelLayout {
                         int gridX, int gridY, int gridW, int gridH,
                         int countY, int sortX, int sortY, int sortW, int sortH, int lineHeight) {
         this.panelX = panelX; this.panelY = panelY; this.panelW = panelW; this.panelH = panelH;
+        this.showCategoryBar = showCategoryBar;
         this.columns = columns; this.visibleRows = visibleRows; this.totalRows = totalRows;
         this.startRow = startRow; this.maxScroll = maxScroll;
         this.catX = catX; this.catY = catY; this.catW = catW;
@@ -59,19 +61,21 @@ public final class PanelLayout {
     }
 
     public static PanelLayout compute(int leftPos, int topPos, int imageHeight,
-                                      int itemCount, boolean allMode, int scrollOffset, int lineHeight) {
+                                      int itemCount, boolean allMode, int scrollOffset, int lineHeight,
+                                      boolean showCategoryBar) {
         Minecraft mc = Minecraft.getInstance();
         int screenW = mc.getWindow().getGuiScaledWidth();
         int screenH = mc.getWindow().getGuiScaledHeight();
 
         int headerH = PADDING + SEARCH_H + PADDING;
         int footerH = 3 + lineHeight + 2 + SORT_H + PADDING; // 计数行 + 排序按钮 + 底padding
-        // 面板至少要高到能放下整条分类栏，否则下面的分类会被挤出可视区。
+        // 最小高度始终按“整条分类栏”的高度：即使隐藏分类栏，面板也不缩矮（保持观感一致）。
         int catBarH = PADDING * 2 + BundleCategory.values().length * CAT_W;
 
         // ---- 横向：列数由左侧可用宽度决定，贴左缘时压缩 ----
+        int catChrome = showCategoryBar ? (CAT_W + CAT_GAP) : 0;
         int availLeft = Math.max(0, leftPos - GAP - MARGIN);
-        int chromeW = PADDING + CAT_W + CAT_GAP + SCROLL_W + 2 + PADDING;
+        int chromeW = PADDING + catChrome + SCROLL_W + 2 + PADDING;
         int gridAvailW = availLeft - chromeW;
         int maxColsByWidth = (int) Math.floor((gridAvailW + SLOT_SPACING) / (double) SLOT_PITCH);
         int columns = Math.max(MIN_COLS, Math.min(MAX_COLS, maxColsByWidth));
@@ -101,7 +105,7 @@ public final class PanelLayout {
         // ---- 组件矩形（底栏锚定面板底部） ----
         int catX = panelX + PADDING;
         int catY = panelY + PADDING;
-        int searchX = catX + CAT_W + CAT_GAP;
+        int searchX = panelX + PADDING + catChrome;
         int searchY = panelY + PADDING;
         int searchW = panelX + panelW - PADDING - searchX;
         int gridY = panelY + headerH + PADDING;
@@ -115,7 +119,7 @@ public final class PanelLayout {
         int sortH = SORT_H;
         int countY = sortY - 2 - lineHeight;
 
-        return new PanelLayout(panelX, panelY, panelW, panelH,
+        return new PanelLayout(panelX, panelY, panelW, panelH, showCategoryBar,
                 columns, visibleRows, totalRows, startRow, maxScroll,
                 catX, catY, CAT_W,
                 searchX, searchY, searchW, SEARCH_H,
@@ -136,7 +140,7 @@ public final class PanelLayout {
     }
 
     public boolean catButtonFits(int i) {
-        return catButtonY(i) + CAT_W <= panelY + panelH;
+        return showCategoryBar && catButtonY(i) + CAT_W <= panelY + panelH;
     }
 
     public boolean catContains(int i, double mx, double my) {
@@ -152,6 +156,12 @@ public final class PanelLayout {
     /** 是否在物品网格区域内（滚动/点击判定用）。 */
     public boolean insideGrid(double mx, double my) {
         return mx >= gridX && mx < gridX + gridW && my >= gridY && my < gridY + gridH;
+    }
+
+    /** 滚动条滑块高度（与渲染一致）。 */
+    public int thumbHeight() {
+        if (maxScroll <= 0) return scrollH;
+        return Math.max(12, scrollH * visibleRows / totalRows);
     }
 
     /** 网格中 (row,col) 的格子左上角 X。 */

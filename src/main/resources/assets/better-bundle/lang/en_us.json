@@ -1,0 +1,19 @@
+{
+  "text.autoconfig.better-bundle.title": "Better Bundle",
+  "text.autoconfig.better-bundle.option.showCategoryBar": "Show category bar",
+  "text.autoconfig.better-bundle.option.showCategoryBar.@Tooltip": "Show the category buttons on the left of the panel. When off, use the search box to find items.",
+  "text.autoconfig.better-bundle.option.panelVisibility": "Panel visibility",
+  "text.autoconfig.better-bundle.option.panelVisibility.@Tooltip": "Whether the panel is shown by default.",
+  "text.autoconfig.better-bundle.panelVisibility.ALWAYS_ON": "Always on",
+  "text.autoconfig.better-bundle.panelVisibility.ALWAYS_OFF": "Always off",
+  "text.autoconfig.better-bundle.panelVisibility.REMEMBER_LAST": "Remember last",
+  "text.autoconfig.better-bundle.category.advanced": "Advanced",
+  "text.autoconfig.better-bundle.option.minDelayTicks": "Min action delay (ticks)",
+  "text.autoconfig.better-bundle.option.minDelayTicks.@Tooltip": "Minimum delay between two sort actions. Lower = faster but more packets.",
+  "text.autoconfig.better-bundle.option.maxDelayTicks": "Max action delay (ticks)",
+  "text.autoconfig.better-bundle.option.maxDelayTicks.@Tooltip": "Maximum delay between two sort actions.",
+  "text.autoconfig.better-bundle.option.confirmTimeoutTicks": "Confirm timeout (ticks)",
+  "text.autoconfig.better-bundle.option.confirmTimeoutTicks.@Tooltip": "Give up (and roll back) if the server does not confirm an action within this many ticks.",
+  "text.autoconfig.better-bundle.option.maxTotalMoves": "Max actions per sort",
+  "text.autoconfig.better-bundle.option.maxTotalMoves.@Tooltip": "Refuse a single sort that needs more actions than this (asks you to sort in batches)."
+}

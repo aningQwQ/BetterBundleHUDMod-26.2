@@ -1,0 +1,19 @@
+{
+  "text.autoconfig.better-bundle.title": "收纳袋面板 配置",
+  "text.autoconfig.better-bundle.option.showCategoryBar": "显示分类栏",
+  "text.autoconfig.better-bundle.option.showCategoryBar.@Tooltip": "显示面板左侧的分类按钮栏。关闭后用搜索框查找物品。",
+  "text.autoconfig.better-bundle.option.panelVisibility": "面板显隐",
+  "text.autoconfig.better-bundle.option.panelVisibility.@Tooltip": "面板默认是否显示。",
+  "text.autoconfig.better-bundle.panelVisibility.ALWAYS_ON": "一直开",
+  "text.autoconfig.better-bundle.panelVisibility.ALWAYS_OFF": "一直关",
+  "text.autoconfig.better-bundle.panelVisibility.REMEMBER_LAST": "跟随上次",
+  "text.autoconfig.better-bundle.category.advanced": "高级",
+  "text.autoconfig.better-bundle.option.minDelayTicks": "动作最小间隔 (tick)",
+  "text.autoconfig.better-bundle.option.minDelayTicks.@Tooltip": "两次整理动作之间的最小间隔。越小越快，但发包更密。",
+  "text.autoconfig.better-bundle.option.maxDelayTicks": "动作最大间隔 (tick)",
+  "text.autoconfig.better-bundle.option.maxDelayTicks.@Tooltip": "两次整理动作之间的最大间隔。",
+  "text.autoconfig.better-bundle.option.confirmTimeoutTicks": "确认超时 (tick)",
+  "text.autoconfig.better-bundle.option.confirmTimeoutTicks.@Tooltip": "超过这么多 tick 仍收不到服务端确认，就熔断并回滚。",
+  "text.autoconfig.better-bundle.option.maxTotalMoves": "单次整理上限 (动作数)",
+  "text.autoconfig.better-bundle.option.maxTotalMoves.@Tooltip": "单次整理需要的动作数超过此值就拒绝，提示分批整理。"
+}
