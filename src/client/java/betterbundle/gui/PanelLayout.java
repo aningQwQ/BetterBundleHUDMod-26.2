@@ -153,6 +153,11 @@ public final class PanelLayout {
         return mx >= searchX && mx <= searchX + searchW && my >= searchY && my <= searchY + searchH;
     }
 
+    /** 面板所在的横向列（x 落在面板左右范围内，y 不限）——用于吞掉“面板及其下方空白”的点击。 */
+    public boolean insideColumn(double mx) {
+        return mx >= panelX && mx < panelX + panelW;
+    }
+
     /** 是否在物品网格区域内（滚动/点击判定用）。 */
     public boolean insideGrid(double mx, double my) {
         return mx >= gridX && mx < gridX + gridW && my >= gridY && my < gridY + gridH;

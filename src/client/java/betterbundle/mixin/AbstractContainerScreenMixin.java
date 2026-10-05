@@ -112,8 +112,11 @@ public abstract class AbstractContainerScreenMixin {
         if (!cursor.isEmpty() && isInsidePanelBounds(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
             BundleCategory cat = BundlePanelRenderer.getCategoryAt(mx, my, self.leftPos, self.topPos, self.imageHeight);
             if (cat == null) {
-                boolean handled = BundlePanelInteraction.handlePanelInsert(event.button());
-                if (handled) cir.setReturnValue(true);
+                BundlePanelInteraction.handlePanelInsert(event.button());
+                // 面板在容器 GUI 之外：无论能否塞入都必须吞掉点击。
+                // 否则未吞掉时会落到原版“点击 GUI 外”，把光标上的物品丢出。
+                cir.setReturnValue(true);
+                return;
             }
         }
 
@@ -127,7 +130,8 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private static boolean isInsidePanelBounds(double mx, double my, int leftPos, int topPos, int imageHeight) {
-        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insidePanel(mx, my);
+        // 面板所在横向列（上下不限）：连面板下方空白也覆盖，避免“点击面板空白处”把光标物品丢出。
+        return BundlePanelRenderer.currentLayout(leftPos, topPos, imageHeight).insideColumn(mx);
     }
 
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
