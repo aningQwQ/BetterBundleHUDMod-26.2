@@ -1,5 +1,6 @@
 {
   "text.autoconfig.better-bundle.title": "收纳袋面板 配置",
+  "text.autoconfig.better-bundle.category.default": "常规",
   "text.autoconfig.better-bundle.option.showCategoryBar": "显示分类栏",
   "text.autoconfig.better-bundle.option.showCategoryBar.@Tooltip": "显示面板左侧的分类按钮栏。关闭后用搜索框查找物品。",
   "text.autoconfig.better-bundle.option.panelVisibility": "面板显隐",

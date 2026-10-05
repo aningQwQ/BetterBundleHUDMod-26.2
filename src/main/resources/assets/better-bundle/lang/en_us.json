@@ -1,5 +1,6 @@
 {
   "text.autoconfig.better-bundle.title": "Better Bundle",
+  "text.autoconfig.better-bundle.category.default": "General",
   "text.autoconfig.better-bundle.option.showCategoryBar": "Show category bar",
   "text.autoconfig.better-bundle.option.showCategoryBar.@Tooltip": "Show the category buttons on the left of the panel. When off, use the search box to find items.",
   "text.autoconfig.better-bundle.option.panelVisibility": "Panel visibility",
