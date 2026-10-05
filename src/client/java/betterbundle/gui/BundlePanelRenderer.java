@@ -76,6 +76,14 @@ public final class BundlePanelRenderer {
                 result.add(new FlatItem(entry.bundleSlot(), i, items.get(i)));
             }
         }
+        // UI 层按物品 id 稳定排序：只改显示顺序，不改物理存储与交互映射
+        // （FlatItem 仍带 bundleSlot/itemIndex，取出与悬停不受影响）。
+        // 同 id 的跨袋条目会相邻，便于取用；再按组件、袋序、袋内序号保证确定性。
+        result.sort(Comparator
+                .comparing((FlatItem fi) -> BuiltInRegistries.ITEM.getKey(fi.stack().getItem()).toString())
+                .thenComparingInt(fi -> ItemStack.hashItemAndComponents(fi.stack()))
+                .thenComparingInt(FlatItem::bundleSlot)
+                .thenComparingInt(FlatItem::itemIndex));
         return result;
     }
 
