@@ -3,7 +3,7 @@
 为《我的世界》收纳袋（Bundle）添加一个可快速访问、整理与塞入的侧边面板。
 
 - 客户端 Mod（仅 `client` 环境），不修改服务端
-- 目标版本：Minecraft **26.1 – 26.1.2** / Fabric
+- 支持版本：Minecraft **26.1 – 26.3**（26.1 / 26.1.1 / 26.1.2 / 26.2 / 26.3，见下方「版本与下载」）
 
 ---
 
@@ -65,22 +65,27 @@
 
 ---
 
-## 环境要求
+## 版本与下载
 
-| 组件 | 版本 |
-|---|---|
-| Minecraft | 26.1 / 26.1.1 / 26.1.2 |
-| Fabric Loader | >= 0.19.5 |
-| Fabric API | 0.155.3+26.1.2 或兼容版本 |
-| Cloth Config | >= 26.1.154（配置界面必需） |
-| Java | >= 25 |
+本模组按 Minecraft 版本分别构建，请下载与你游戏版本对应的文件（命名规则：`better-bundle-mc<游戏版本>-v<mod版本>-<发布序号>`）。
+
+| Minecraft | 下载文件 | Fabric Loader | Fabric API | Cloth Config |
+|---|---|---|---|---|
+| 26.1 / 26.1.1 / 26.1.2 | `better-bundle-mc26.1.2-v…-1.jar` | >= 0.19.5 | 0.155.3+26.1.2 | >= 26.1.154（必需） |
+| 26.2 | `better-bundle-mc26.2-v…-1.jar` | >= 0.19.3 | 0.153.0+26.2 | >= 26.2.155（必需） |
+| 26.3 | `better-bundle-mc26.3-v…-1.jar` | >= 0.19.5 | 0.162.0+26.3 | >= 26.3.159（必需） |
+
+- Java >= 25；**Cloth Config** 为配置界面必需，**ModMenu** 可选（提供模组列表里的「配置」入口；26.1.x 对应 ModMenu 18.0.2）。
+- 发行版下载：见仓库的 **Releases** 页面。
+
+> 开发分支：`main` 为 26.2 主开发线；26.1.x、26.3 为兼容分支（只做环境适配，功能特性以 `main` 为准）。
 
 ---
 
 ## 安装
 
-1. 安装 Fabric Loader（>= 0.19.3）。
-2. 将 [Fabric API](https://modrinth.com/mod/fabric-api) 与 `better-bundle-<version>.jar` 放入 `.minecraft/mods/`。
+1. 安装与你的游戏版本匹配的 Fabric Loader。
+2. 将 [Fabric API](https://modrinth.com/mod/fabric-api)、[Cloth Config](https://modrinth.com/mod/cloth-config) 以及「版本与下载」表中对应你游戏版本的 `better-bundle-…jar` 放入 `.minecraft/mods/`。
 3. 启动游戏（仅客户端需要安装）。
 
 发行版下载：见仓库的 **Releases** 页面。
@@ -97,6 +102,8 @@
 
 - `better-bundle-<version>.jar` — 安装用
 - `better-bundle-<version>-sources.jar` — 源码
+
+发布时按命名规则改为 `better-bundle-mc<游戏版本>-v<版本>-<发布序号>.jar`。
 
 开发运行：
 
