@@ -26,7 +26,7 @@ public final class BagModel {
         this.bundleStack = bundleStack;
         BundleContents contents = bundleStack.get(DataComponents.BUNDLE_CONTENTS);
         if (contents != null) {
-            contents.itemCopyStream().forEach(s -> entries.add(new BagEntry(s)));
+            contents.itemCopies().forEach(s -> entries.add(new BagEntry(s)));
             this.usedWeight = ItemWeights.contentsWeight(contents);
         }
         if (!entries.isEmpty() && entries.stream().noneMatch(BagEntry::movable)) {

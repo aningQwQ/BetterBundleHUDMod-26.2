@@ -1,5 +1,6 @@
 package betterbundle.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -11,7 +12,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,8 +24,6 @@ import java.util.Set;
 import betterbundle.util.BundleContentsHelper;
 
 public final class BundlePanelInteraction {
-
-    private static final int GLFW_MOD_SHIFT = 0x1;
 
     private BundlePanelInteraction() {}
 
@@ -74,12 +72,12 @@ public final class BundlePanelInteraction {
 
         int bundleSlot = clicked.bundleSlot();
         int containerId = player.containerMenu.containerId;
-        boolean shiftDown = (modifiers & GLFW_MOD_SHIFT) != 0;
+        boolean shiftDown = (modifiers & InputConstants.MOD_SHIFT) != 0;
 
         if (shiftDown) {
             boolean inContainer = !(screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen);
             int destSlot;
-            if (button == 0 && inContainer) {
+            if (button == InputConstants.MOUSE_BUTTON_LEFT && inContainer) {
                 destSlot = findEmptyContainerSlot(player);
                 if (destSlot < 0) destSlot = findEmptyPlayerSlot(player);
             } else {
@@ -128,8 +126,7 @@ public final class BundlePanelInteraction {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.getWindow() == null) return false;
 
-        long window = client.getWindow().handle();
-        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) != GLFW.GLFW_PRESS) return false;
+        if (!InputConstants.isKeyDown(InputConstants.KEY_SPACE)) return false;
 
         Player player = client.player;
         if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;

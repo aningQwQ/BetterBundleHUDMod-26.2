@@ -79,7 +79,7 @@ public final class BundleContentsHelper {
         BundleContents contents = getContents(bundleStack);
         if (contents == null || item.isEmpty()) return 0;
         int n = 0;
-        for (ItemStack s : contents.itemCopyStream().toList()) {
+        for (ItemStack s : contents.itemCopies().toList()) {
             if (ItemStack.isSameItemSameComponents(s, item)) n += s.getCount();
         }
         return n;

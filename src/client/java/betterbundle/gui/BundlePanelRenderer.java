@@ -4,6 +4,7 @@ import net.sourceforge.pinyin4j.PinyinHelper;
 import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
 import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
 import net.minecraft.client.Minecraft;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
@@ -77,7 +78,7 @@ public final class BundlePanelRenderer {
         List<FlatItem> result = new ArrayList<>();
         for (BundleSlotEntry entry : bundles) {
             if (entry.contents() == null) continue;
-            List<ItemStack> items = entry.contents().itemCopyStream().toList();
+            List<ItemStack> items = entry.contents().itemCopies().toList();
             for (int i = 0; i < items.size(); i++) {
                 result.add(new FlatItem(entry.bundleSlot(), i, items.get(i)));
             }
@@ -211,11 +212,11 @@ public final class BundlePanelRenderer {
 
     public static void onSearchKeyPress(int key) {
         if (!searchFocused || currentCategory != BundleCategory.ALL) return;
-        if (key == 259) {
+        if (key == InputConstants.KEY_BACKSPACE) {
             if (!searchQuery.isEmpty()) { searchQuery = searchQuery.substring(0, searchQuery.length() - 1); scrollOffset = 0; }
-        } else if (key == 256) {
+        } else if (key == InputConstants.KEY_ESCAPE) {
             searchQuery = ""; searchFocused = false; scrollOffset = 0;
-        } else if (key == 257 || key == 335) {
+        } else if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
             searchFocused = false;
         }
     }

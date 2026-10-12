@@ -3,7 +3,7 @@
 为《我的世界》收纳袋（Bundle）添加一个可快速访问、整理与塞入的侧边面板。
 
 - 客户端 Mod（仅 `client` 环境），不修改服务端
-- 目标版本：Minecraft **26.2** / Fabric
+- 目标版本：Minecraft **26.3** / Fabric
 
 ---
 
@@ -69,10 +69,10 @@
 
 | 组件 | 版本 |
 |---|---|
-| Minecraft | 26.2 |
-| Fabric Loader | >= 0.19.3 |
-| Fabric API | 0.153.0+26.2 或兼容版本 |
-| Cloth Config | >= 26.2.155（配置界面必需） |
+| Minecraft | 26.3 |
+| Fabric Loader | >= 0.19.5 |
+| Fabric API | 0.162.0+26.3 或兼容版本 |
+| Cloth Config | >= 26.3.159（配置界面必需） |
 | Java | >= 25 |
 
 ---

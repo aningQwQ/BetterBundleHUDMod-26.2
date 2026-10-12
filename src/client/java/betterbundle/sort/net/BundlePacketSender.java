@@ -51,7 +51,7 @@ public final class BundlePacketSender {
             // 读出该条目的整叠数量，用于判断放入后是否会留下余量。
             BundleContents contents = srcSlot.getItem().get(DataComponents.BUNDLE_CONTENTS);
             if (contents == null) return false;
-            List<ItemStack> items = contents.itemCopyStream().toList();
+            List<ItemStack> items = contents.itemCopies().toList();
             if (index >= items.size()) return false;
             ItemStack item = items.get(index);
             int entryCount = item.getCount();
@@ -90,7 +90,7 @@ public final class BundlePacketSender {
     private static int currentIndexInBundle(ItemStack bagStack, ItemKey key) {
         BundleContents contents = bagStack.get(DataComponents.BUNDLE_CONTENTS);
         if (contents == null) return -1;
-        List<ItemStack> items = contents.itemCopyStream().toList();
+        List<ItemStack> items = contents.itemCopies().toList();
         for (int i = 0; i < items.size(); i++) {
             if (ItemKey.of(items.get(i)).equals(key)) return i;
         }

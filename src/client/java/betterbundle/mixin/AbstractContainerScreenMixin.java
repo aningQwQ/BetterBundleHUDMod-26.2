@@ -5,6 +5,7 @@ import betterbundle.gui.BundlePanelInteraction;
 import betterbundle.gui.BundlePanelRenderer;
 import betterbundle.gui.SortButton;
 import betterbundle.sort.exec.SortStateMachine;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
@@ -12,7 +13,6 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -50,7 +50,7 @@ public abstract class AbstractContainerScreenMixin {
         }
 
         // Bulk-insert: space+left anywhere starts the sweep.
-        if (event.button() == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
             BundlePanelInteraction.startBulkInsert();
             sweeping = true;
             sweepLastX = event.x();
@@ -273,7 +273,6 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private static boolean isSpaceDown() {
-        long window = Minecraft.getInstance().getWindow().handle();
-        return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
+        return InputConstants.isKeyDown(InputConstants.KEY_SPACE);
     }
 }

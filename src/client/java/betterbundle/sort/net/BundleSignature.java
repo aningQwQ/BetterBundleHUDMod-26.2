@@ -21,7 +21,7 @@ public final class BundleSignature {
         if (bagStack == null || bagStack.isEmpty()) return map;
         BundleContents contents = bagStack.get(DataComponents.BUNDLE_CONTENTS);
         if (contents == null) return map;
-        contents.itemCopyStream().forEach(s -> map.merge(keyOf(s), s.getCount(), Integer::sum));
+        contents.itemCopies().forEach(s -> map.merge(keyOf(s), s.getCount(), Integer::sum));
         return map;
     }
 
