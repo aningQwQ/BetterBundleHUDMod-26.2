@@ -97,8 +97,7 @@ public final class BundlePanelRenderer {
         List<FlatItem> filtered = new ArrayList<>();
         BundleCategory cat = effectiveCategory();
         for (FlatItem fi : items) {
-            String key = BuiltInRegistries.ITEM.getKey(fi.stack().getItem()).toString();
-            if (cat.matches(key)) filtered.add(fi);
+            if (cat.matches(fi.stack().getItem())) filtered.add(fi);
         }
         if (query.isEmpty()) return filtered;
         String q = query.toLowerCase(Locale.ROOT);
