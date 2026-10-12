@@ -166,7 +166,7 @@ public final class BundlePanelRenderer {
 
     public static boolean isRecipeBookOpen() {
         Minecraft client = Minecraft.getInstance();
-        if (client.gui.screen() instanceof AbstractRecipeBookScreen<?> screen) return screen.recipeBookComponent.isVisible();
+        if (client.screen instanceof AbstractRecipeBookScreen<?> screen) return screen.recipeBookComponent.isVisible();
         return false;
     }
 
@@ -174,7 +174,7 @@ public final class BundlePanelRenderer {
     public static boolean isEffectivelyVisible() {
         // 创造背包界面：面板整体视为不可见（各交互分支都会因此自然跳过）。
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen)) return false;
         return visible && !isRecipeBookOpen();
     }
     public static void toggleVisible() {
@@ -231,7 +231,7 @@ public final class BundlePanelRenderer {
     public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
         Minecraft mc = Minecraft.getInstance();
         // 创造模式：整个面板不绘制（仅开关打开时显示“不支持”）。
-        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) {
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen)) {
             if (visible) renderUnsupported(graphics, leftPos, topPos, imageHeight);
             return;
         }

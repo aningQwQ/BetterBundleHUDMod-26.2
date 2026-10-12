@@ -132,7 +132,7 @@ public final class BundlePanelInteraction {
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) != GLFW.GLFW_PRESS) return false;
 
         Player player = client.player;
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) return false;
         // 入队与光标状态解耦：快速滑动时本机正在用光标搬运上一格，光标常常非空，
         // 若在这里拒绝入队，滑过去的槽位会被整体丢弃，表现为「稍快就不放入」。
         // 真正执行由状态机串行进行，且只在光标为空时才开始，安全性不受影响。
@@ -414,7 +414,7 @@ public final class BundlePanelInteraction {
         Player player = client.player;
         if (player == null) return false;
         // 创造模式：光标可能来自无限 picker，禁用面板分发塞入，避免复制。
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) return false;
 
         ItemStack cursor = player.containerMenu.getCarried();
         if (cursor.isEmpty()) return false;

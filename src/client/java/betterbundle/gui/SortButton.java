@@ -39,7 +39,7 @@ public final class SortButton {
         Player player = client.player;
         if (player == null) return true;
 
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) {
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) {
             setError("创造模式暂不支持整理");
             return true;
         }

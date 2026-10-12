@@ -20,7 +20,7 @@ public abstract class InventoryScreenMixin {
     private void onExtractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         Minecraft mc = Minecraft.getInstance();
-        boolean creative = betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen());
+        boolean creative = betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen);
 
         // 创造模式：只绘制“不支持”提示，其余面板内容/按钮一律不画。
         BundlePanelRenderer.render(graphics,
