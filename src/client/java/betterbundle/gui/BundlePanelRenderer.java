@@ -1,5 +1,6 @@
 package betterbundle.gui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.sourceforge.pinyin4j.PinyinHelper;
 import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
 import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
@@ -7,8 +8,13 @@ import net.minecraft.client.Minecraft;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -29,9 +35,7 @@ public final class BundlePanelRenderer {
     private static int scrollOffset = 0;
     public static boolean visible = true;
 
-    public static String searchQuery = "";
-    public static boolean searchFocused = false;
-    private static int searchCursorTick = 0;
+    private static EditBox searchBox; // 原版搜索框（惰性创建，面板内手动渲染）
     private static int hoveredBundleSlot = -1;
 
     public static BundleCategory currentCategory = BundleCategory.ALL;
@@ -48,7 +52,7 @@ public final class BundlePanelRenderer {
 
     public static PanelLayout currentLayout(int leftPos, int topPos, int imageHeight) {
         Minecraft mc = Minecraft.getInstance();
-        List<FlatItem> items = filterItems(buildFlatItemList(getBundles()), searchQuery);
+        List<FlatItem> items = filterItems(buildFlatItemList(getBundles()), getSearchQuery());
         return PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
                 effectiveCategory() == BundleCategory.ALL, scrollOffset, mc.font.lineHeight,
                 ModConfig.get().showCategoryBar);
@@ -60,7 +64,6 @@ public final class BundlePanelRenderer {
     }
 
     public static int getScrollOffset() { return scrollOffset; }
-    public static void scrollToTop() { scrollOffset = 0; }
 
     public static void scrollBy(int delta, int leftPos, int topPos, int imageHeight) {
         PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
@@ -200,24 +203,98 @@ public final class BundlePanelRenderer {
 
     public static boolean isInsideSearchBar(double mouseX, double mouseY,
                                             int leftPos, int topPos, int imageHeight) {
-        if (currentCategory != BundleCategory.ALL) return false; // Only ALL mode has interactive search
+        if (effectiveCategory() != BundleCategory.ALL) return false; // 仅 ALL 模式可交互
+        if (!isEffectivelyVisible()) return false;
         return currentLayout(leftPos, topPos, imageHeight).insideSearch(mouseX, mouseY);
     }
 
-    public static void onCharTyped(char c) {
-        if (!searchFocused || currentCategory != BundleCategory.ALL) return;
-        if (c >= 32 && c != 127) { searchQuery += c; scrollOffset = 0; }
+    // --- 原版搜索框（EditBox） ---
+
+    /** 惰性创建原版 EditBox；提示文案与样式对齐原版配方书搜索框。 */
+    private static EditBox searchBox() {
+        if (searchBox == null) {
+            Minecraft mc = Minecraft.getInstance();
+            Component hint = Component.translatable("gui.recipebook.search_hint")
+                    .withStyle(EditBox.SEARCH_HINT_STYLE);
+            searchBox = new EditBox(mc.font, 0, 0, 100, PanelLayout.SEARCH_H,
+                    Component.translatable("gui.recipebook.search_hint"));
+            searchBox.setHint(hint);
+            searchBox.setMaxLength(64);
+            searchBox.setResponder(v -> scrollOffset = 0);
+        }
+        return searchBox;
     }
 
-    public static void onSearchKeyPress(int key) {
-        if (!searchFocused || currentCategory != BundleCategory.ALL) return;
-        if (key == InputConstants.KEY_BACKSPACE) {
-            if (!searchQuery.isEmpty()) { searchQuery = searchQuery.substring(0, searchQuery.length() - 1); scrollOffset = 0; }
-        } else if (key == InputConstants.KEY_ESCAPE) {
-            searchQuery = ""; searchFocused = false; scrollOffset = 0;
-        } else if (key == InputConstants.KEY_RETURN || key == InputConstants.KEY_NUMPADENTER) {
-            searchFocused = false;
+    public static String getSearchQuery() {
+        return searchBox == null ? "" : searchBox.getValue();
+    }
+
+    /** 供 mixin 暴露给 JEI 等 mod 的「容器内聚焦文本框」判定。 */
+    public static EditBox getSearchBox() {
+        return searchBox();
+    }
+
+    /** 把搜索框对齐到布局；非 ALL 模式隐藏（原逻辑用分类标题占位）。 */
+    private static void layoutSearchBox(PanelLayout lay, boolean allMode) {
+        EditBox box = searchBox();
+        box.setVisible(allMode);
+        if (allMode) {
+            box.setX(lay.searchX);
+            box.setY(lay.searchY);
+            box.setWidth(lay.searchW);
+            box.setHeight(lay.searchH);
+        } else {
+            box.setFocused(false);
         }
+    }
+
+    public static boolean isSearchFocused() {
+        return searchBox != null && searchBox.isVisible() && searchBox.isFocused();
+    }
+
+    public static void unfocusSearch() {
+        if (searchBox != null) searchBox.setFocused(false);
+    }
+
+    /** 切换分类时清空查询。 */
+    public static void resetSearch() {
+        if (searchBox != null) searchBox.setValue("");
+        scrollOffset = 0;
+    }
+
+    /** 点击搜索栏：同步布局后交给原版 EditBox 处理光标定位。 */
+    public static void handleSearchClick(MouseButtonEvent event, boolean doubleClick,
+                                         int leftPos, int topPos, int imageHeight) {
+        EditBox box = searchBox();
+        PanelLayout lay = currentLayout(leftPos, topPos, imageHeight);
+        box.setX(lay.searchX);
+        box.setY(lay.searchY);
+        box.setWidth(lay.searchW);
+        box.setHeight(lay.searchH);
+        box.setVisible(true);
+        box.setFocused(true);
+        box.mouseClicked(event, doubleClick);
+    }
+
+    /** 聚焦时按键：Esc 清空并失焦、Enter 失焦，其余转交原版 EditBox。 */
+    public static void handleSearchKey(KeyEvent event) {
+        EditBox box = searchBox;
+        if (box == null || !box.isFocused()) return;
+        if (event.isEscape()) {
+            box.setValue("");
+            box.setFocused(false);
+            scrollOffset = 0;
+            return;
+        }
+        if (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER) {
+            box.setFocused(false);
+            return;
+        }
+        box.keyPressed(event);
+    }
+
+    public static void handleSearchChar(CharacterEvent event) {
+        if (searchBox != null && searchBox.isFocused()) searchBox.charTyped(event);
     }
 
     // --- render ---
@@ -229,18 +306,23 @@ public final class BundlePanelRenderer {
         g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
-    public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight, int mouseX, int mouseY) {
+    public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight,
+                              int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         // 创造模式：整个面板不绘制（仅开关打开时显示“不支持”）。
         if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) {
+            unfocusSearch();
             if (visible) renderUnsupported(graphics, leftPos, topPos, imageHeight);
             return;
         }
-        if (!isEffectivelyVisible()) return;
+        if (!isEffectivelyVisible()) {
+            unfocusSearch();
+            return;
+        }
 
         Font font = mc.font;
         List<BundleSlotEntry> bundles = getBundles();
-        List<FlatItem> items = filterItems(buildFlatItemList(bundles), searchQuery);
+        List<FlatItem> items = filterItems(buildFlatItemList(bundles), getSearchQuery());
         boolean showCat = ModConfig.get().showCategoryBar;
         BundleCategory eff = effectiveCategory();
         PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, items.size(),
@@ -312,27 +394,12 @@ public final class BundlePanelRenderer {
             hoveredBundleSlot = -1;
         }
 
-        // 搜索栏（始终绘制，仅 ALL 可交互）
-        {
-            boolean active = isAllMode && searchFocused;
-            int bg = isAllMode ? (active ? 0x60000000 : 0x40FFFFFF) : 0x30FFFFFF;
-            graphics.fill(lay.searchX, lay.searchY, lay.searchX + lay.searchW, lay.searchY + lay.searchH, bg);
-            if (active) graphics.fill(lay.searchX + 1, lay.searchY + 1, lay.searchX + lay.searchW - 1, lay.searchY + lay.searchH - 1, 0x50FFFFFF);
-            int textY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
-            if (isAllMode && searchQuery.isEmpty() && !searchFocused) {
-                graphics.text(font, "Search...", lay.searchX + 3, textY, 0xFF666666, false);
-            } else if (isAllMode && !searchQuery.isEmpty()) {
-                graphics.text(font, searchQuery, lay.searchX + 3, textY, 0xFFFFFFFF, false);
-                searchCursorTick = (searchCursorTick + 1) % 40;
-                if (searchFocused && searchCursorTick < 20) {
-                    int cursorX = lay.searchX + 3 + font.width(searchQuery);
-                    graphics.fill(cursorX, textY, cursorX + 1, textY + font.lineHeight, 0xFFFFFFFF);
-                }
-            }
-        }
-
-        // 非 ALL：在搜索栏位置显示分类标题
-        if (eff != BundleCategory.ALL) {
+        // 搜索栏：原版 EditBox（仅 ALL 模式可见）；非 ALL 在同行显示分类标题
+        if (isAllMode) {
+            layoutSearchBox(lay, true);
+            searchBox().extractWidgetRenderState(graphics, mouseX, mouseY, partialTick);
+        } else {
+            layoutSearchBox(lay, false);
             String label = currentCategory.getDisplayName();
             int catTextY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
             graphics.text(font, label, lay.searchX + 3, catTextY, 0xFFCCCCCC, false);

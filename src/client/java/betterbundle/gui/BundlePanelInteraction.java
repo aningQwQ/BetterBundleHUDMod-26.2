@@ -34,7 +34,7 @@ public final class BundlePanelInteraction {
 
         // Use filtered items to match rendered panel
         List<BundlePanelRenderer.FlatItem> items =
-                BundlePanelRenderer.filterItems(BundlePanelRenderer.buildFlatItemList(bundles), BundlePanelRenderer.searchQuery);
+                BundlePanelRenderer.filterItems(BundlePanelRenderer.buildFlatItemList(bundles), BundlePanelRenderer.getSearchQuery());
         if (items.isEmpty()) return null;
 
         PanelLayout lay = BundlePanelRenderer.currentLayout(leftPos, topPos);

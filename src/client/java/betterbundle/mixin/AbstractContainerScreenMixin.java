@@ -7,6 +7,7 @@ import betterbundle.gui.SortButton;
 import betterbundle.sort.exec.SortStateMachine;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.input.KeyEvent;
@@ -20,12 +21,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin {
+
+    /**
+     * 暴露给第三方（JEI 的 isContainerTextFieldFocused 反射扫描 Screen 层次里声明为 EditBox 的字段）：
+     * 点击搜索框时指向我们的原版搜索框，使 JEI 认为容器内已有聚焦文本框而让路，
+     * 避免 JEI 接管输入、把 linux-ime 的 activeBox 抢到 JEI 搜索框（中文被截胡）。
+     */
+    @Unique
+    private EditBox betterbundle$searchField;
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
@@ -88,21 +98,20 @@ public abstract class AbstractContainerScreenMixin {
                 BundleCategory cat = BundlePanelRenderer.getCategoryAt(mx, my, self.leftPos, self.topPos, self.imageHeight);
                 if (cat != null) {
                     BundlePanelRenderer.currentCategory = cat;
-                    BundlePanelRenderer.searchQuery = "";
-                    BundlePanelRenderer.scrollToTop();
+                    BundlePanelRenderer.resetSearch();
                     cir.setReturnValue(true);
                     return;
                 }
             }
 
-            if (BundlePanelRenderer.isEffectivelyVisible()
-                    && BundlePanelRenderer.isInsideSearchBar(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
-                BundlePanelRenderer.searchFocused = true;
+            if (BundlePanelRenderer.isInsideSearchBar(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
+                BundlePanelRenderer.handleSearchClick(event, doubleClick, self.leftPos, self.topPos, self.imageHeight);
+                this.betterbundle$searchField = BundlePanelRenderer.getSearchBox();
                 cir.setReturnValue(true);
                 return;
             }
 
-            BundlePanelRenderer.searchFocused = false;
+            BundlePanelRenderer.unfocusSearch();
         }
 
         if (!BundlePanelRenderer.isEffectivelyVisible()) return;
@@ -151,8 +160,8 @@ public abstract class AbstractContainerScreenMixin {
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
     private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
-        if (BundlePanelRenderer.searchFocused) {
-            BundlePanelRenderer.onSearchKeyPress(event.key());
+        if (BundlePanelRenderer.isSearchFocused()) {
+            BundlePanelRenderer.handleSearchKey(event);
             cir.setReturnValue(true);
         }
     }
