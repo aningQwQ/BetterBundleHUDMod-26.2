@@ -27,7 +27,7 @@ public abstract class InventoryScreenMixin {
                 self.leftPos,
                 self.topPos,
                 self.imageHeight,
-                mouseX, mouseY);
+                mouseX, mouseY, partialTick);
         // 创造模式：保留面板开关按钮，但不绘制面板内容/悬浮放大/整理按钮。
         if (creative) {
             renderToggleButton(graphics, self.leftPos + self.imageWidth, self.topPos + 5, mouseX, mouseY);
