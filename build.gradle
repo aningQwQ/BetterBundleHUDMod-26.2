@@ -1,10 +1,18 @@
 plugins {
-    id 'fabric-loom' version "${loom_version}"
+    id 'dev.kikugie.loom-back-compat'
     id 'maven-publish'
 }
 
 version = project.mod_version
 group = project.maven_group
+
+base {
+    archivesName = "better-bundle-mc${project.minecraft_version}-v${project.mod_version}"
+}
+
+tasks.withType(org.gradle.api.tasks.bundling.AbstractArchiveTask).configureEach {
+    archiveVersion = ""
+}
 
 repositories {
     mavenCentral()
@@ -25,7 +33,7 @@ configurations {
 
 loom {
     splitEnvironmentSourceSets()
-    accessWidenerPath = file("src/main/resources/better-bundle.accesswidener")
+    accessWidenerPath = rootProject.file("src/main/resources/better-bundle.accesswidener")
 
     mods {
         "better-bundle" {
@@ -36,7 +44,7 @@ loom {
 }
 
 dependencies {
-    mappings loom.officialMojangMappings()
+    loomx.applyMojangMappings()
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
 
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
@@ -58,9 +66,13 @@ dependencies {
 processResources {
     def version = project.version
     inputs.property "version", version
+    inputs.property "minecraft_range", project.minecraft_range
+    inputs.property "cloth_config_version", project.cloth_config_version
 
     filesMatching("fabric.mod.json") {
-        expand "version": version
+        expand "version": version,
+               "minecraft_range": project.minecraft_range,
+               "cloth_config_version": project.cloth_config_version
     }
 }
 
@@ -69,6 +81,9 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
     withSourcesJar()
 
     sourceCompatibility = JavaVersion.VERSION_21
@@ -79,7 +94,7 @@ jar {
     def projectName = project.name
     inputs.property "projectName", projectName
 
-    from("LICENSE") {
+    from(rootProject.file("LICENSE")) {
         rename { "${it}_$projectName"}
     }
 
