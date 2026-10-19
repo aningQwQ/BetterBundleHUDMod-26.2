@@ -6,11 +6,10 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundSelectBundleItemPacket;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.BundleContents;
@@ -68,18 +67,18 @@ public final class BundlePacketSender {
             connection.send(new ServerboundSelectBundleItemPacket(action.srcBagSlot(), index));
 
             // 一次取出整叠到光标。
-            connection.send(click(containerId, action.srcBagSlot(), (byte) 1));
+            connection.send(click(player, containerId, action.srcBagSlot(), (byte) 1));
 
             // 依次放入各目标袋：每个 tryInsert 能塞多少塞多少，余量留在光标带到下一个。
             for (int dst : action.dstBagSlots()) {
                 if (dst < 0 || dst >= slots || dst == action.srcBagSlot()) continue;
-                connection.send(click(containerId, dst, (byte) 0));
+                connection.send(click(player, containerId, dst, (byte) 0));
             }
 
             // 只有确实会留下余量时，才把余量点回源袋。
             // 若光标为空时点 bundle 槽，会走原版逻辑把袋子本身拿起来，因此绝不能无条件点。
             if (leavesRemainder) {
-                connection.send(click(containerId, action.srcBagSlot(), (byte) 0));
+                connection.send(click(player, containerId, action.srcBagSlot(), (byte) 0));
             }
             return true;
         } catch (Throwable t) {
@@ -97,9 +96,9 @@ public final class BundlePacketSender {
         return -1;
     }
 
-    private static ServerboundContainerClickPacket click(int containerId, int slot, byte button) {
+    private static ServerboundContainerClickPacket click(Player player, int containerId, int slot, byte button) {
         return new ServerboundContainerClickPacket(
-                containerId, -1, (short) slot, button,
-                ContainerInput.PICKUP, new Int2ObjectOpenHashMap<>(), HashedStack.EMPTY);
+                containerId, player.containerMenu.getStateId(), slot, button,
+                ClickType.PICKUP, ItemStack.EMPTY, new Int2ObjectOpenHashMap<>());
     }
 }

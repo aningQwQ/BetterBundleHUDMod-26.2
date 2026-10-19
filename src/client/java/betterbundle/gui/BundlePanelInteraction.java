@@ -3,12 +3,11 @@ package betterbundle.gui;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundSelectBundleItemPacket;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
@@ -91,13 +90,13 @@ public final class BundlePanelInteraction {
             // 绝不能循环右键（光标非空后右键会走原版逻辑，把袋子本身拿起来）。
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
-            connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
-            connection.send(makeClickPacket(containerId, destSlot, (byte) 0));
+            connection.send(makeClickPacket(player, containerId, bundleSlot, (byte) 1));
+            connection.send(makeClickPacket(player, containerId, destSlot, (byte) 0));
         } else {
             // 选中是 toggle 语义：先 -1 再设索引，保证确定选中。
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
-            connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
+            connection.send(makeClickPacket(player, containerId, bundleSlot, (byte) 1));
         }
 
         return true;
@@ -128,11 +127,11 @@ public final class BundlePanelInteraction {
         Minecraft client = Minecraft.getInstance();
         if (client.player == null || client.getWindow() == null) return false;
 
-        long window = client.getWindow().handle();
+        long window = client.getWindow().getWindow();
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) != GLFW.GLFW_PRESS) return false;
 
         Player player = client.player;
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) return false;
         // 入队与光标状态解耦：快速滑动时本机正在用光标搬运上一格，光标常常非空，
         // 若在这里拒绝入队，滑过去的槽位会被整体丢弃，表现为「稍快就不放入」。
         // 真正执行由状态机串行进行，且只在光标为空时才开始，安全性不受影响。
@@ -189,10 +188,10 @@ public final class BundlePanelInteraction {
         return targets;
     }
 
-    private static ServerboundContainerClickPacket makeClickPacket(int containerId, int slot, byte button) {
+    private static ServerboundContainerClickPacket makeClickPacket(Player player, int containerId, int slot, byte button) {
         return new ServerboundContainerClickPacket(
-                containerId, -1, (short) slot, button,
-                ContainerInput.PICKUP, new Int2ObjectOpenHashMap<>(), HashedStack.EMPTY);
+                containerId, player.containerMenu.getStateId(), slot, button,
+                ClickType.PICKUP, ItemStack.EMPTY, new Int2ObjectOpenHashMap<>());
     }
 
     private static int findEmptyPlayerSlot(Player player) {
@@ -299,7 +298,7 @@ public final class BundlePanelInteraction {
         bulkSrcSlot = slotIndex;
         bulkSrcBefore = stackSignature(stack);
         bulkRecoverySent = false;
-        connection.send(makeClickPacket(player.containerMenu.containerId, slotIndex, (byte) 0));
+        connection.send(makeClickPacket(player, player.containerMenu.containerId, slotIndex, (byte) 0));
         bulkPhase = BulkPhase.WAIT_PICKUP;
         bulkWaitTicks = 0;
         return true;
@@ -335,7 +334,7 @@ public final class BundlePanelInteraction {
             // 光标长时间未清空：兜底把光标物品点回源槽（避免滞留），只跳过当前格，保留队列。
             ClientPacketListener connection = client.getConnection();
             if (!bulkRecoverySent && connection != null) {
-                connection.send(makeClickPacket(player.containerMenu.containerId, bulkSrcSlot, (byte) 0));
+                connection.send(makeClickPacket(player, player.containerMenu.containerId, bulkSrcSlot, (byte) 0));
                 bulkRecoverySent = true;
                 bulkWaitTicks = 0;
                 return;
@@ -360,11 +359,11 @@ public final class BundlePanelInteraction {
             int cap = BundleContentsHelper.maxAcceptable(stackAt(player, target), carried);
             if (cap <= 0) continue;
             remaining -= Math.min(cap, remaining);
-            connection.send(makeClickPacket(containerId, target, (byte) 0));
+            connection.send(makeClickPacket(player, containerId, target, (byte) 0));
         }
         // 余量点回源槽：全部放入时光标为空且源槽为空，是无害 no-op；
         // 有空余量时把余量放回。绝不在此前空光标点过袋子槽。
-        connection.send(makeClickPacket(containerId, bulkSrcSlot, (byte) 0));
+        connection.send(makeClickPacket(player, containerId, bulkSrcSlot, (byte) 0));
 
         bulkPhase = BulkPhase.WAIT_INSERT;
         bulkWaitTicks = 0;
@@ -414,7 +413,7 @@ public final class BundlePanelInteraction {
         Player player = client.player;
         if (player == null) return false;
         // 创造模式：光标可能来自无限 picker，禁用面板分发塞入，避免复制。
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) return false;
 
         ItemStack cursor = player.containerMenu.getCarried();
         if (cursor.isEmpty()) return false;
@@ -435,7 +434,8 @@ public final class BundlePanelInteraction {
             int cap = BundleContentsHelper.maxAcceptable(stackAt(player, target), cursor);
             if (cap <= 0) continue;
             predicted -= Math.min(cap, predicted);
-            connection.send(makeClickPacket(containerId, target, (byte) 0));
+            // 走客户端本地预测，避免服务端已放入而客户端光标仍残留幽灵物品。
+            client.gameMode.handleInventoryMouseClick(containerId, target, 0, ClickType.PICKUP, player);
         }
         return true;
     }

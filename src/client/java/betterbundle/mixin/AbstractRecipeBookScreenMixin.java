@@ -8,9 +8,6 @@ import betterbundle.sort.exec.SortStateMachine;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,10 +22,9 @@ public abstract class AbstractRecipeBookScreenMixin {
     private EditBox betterbundle$searchField;
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
-    private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+    private void onMouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
-        double mouseX = event.x();
-        double mouseY = event.y();
+        
 
         // 一键整理按钮（面板可见时优先；运行中点击即取消）
         if (BundlePanelRenderer.isEffectivelyVisible()
@@ -60,7 +56,7 @@ public abstract class AbstractRecipeBookScreenMixin {
 
         // Search bar click
         if (BundlePanelRenderer.isInsideSearchBar(mouseX, mouseY, self.leftPos, self.topPos, self.imageHeight)) {
-            BundlePanelRenderer.handleSearchClick(event, doubleClick, self.leftPos, self.topPos, self.imageHeight);
+            BundlePanelRenderer.handleSearchClick(mouseX, mouseY, button, self.leftPos, self.topPos, self.imageHeight);
             this.betterbundle$searchField = BundlePanelRenderer.getSearchBox();
             cir.setReturnValue(true);
             return;
@@ -70,18 +66,18 @@ public abstract class AbstractRecipeBookScreenMixin {
     }
 
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
-    private void onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+    private void onCharTyped(char codePoint, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         if (BundlePanelRenderer.isSearchFocused()) {
-            BundlePanelRenderer.handleSearchChar(event);
+            BundlePanelRenderer.handleSearchChar(codePoint, modifiers);
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
-    private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+    private void onKeyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
         if (BundlePanelRenderer.isSearchFocused()) {
-            BundlePanelRenderer.handleSearchKey(event);
+            BundlePanelRenderer.handleSearchKey(keyCode, scanCode, modifiers);
             cir.setReturnValue(true);
         }
     }

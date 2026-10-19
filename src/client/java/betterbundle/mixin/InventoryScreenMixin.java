@@ -3,7 +3,7 @@ package betterbundle.mixin;
 import betterbundle.gui.BundlePanelRenderer;
 import betterbundle.gui.SortButton;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -16,11 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AbstractContainerScreen.class)
 public abstract class InventoryScreenMixin {
 
-    @Inject(method = "extractContents", at = @At("TAIL"))
-    private void onExtractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+    @Inject(method = "render", at = @At("TAIL"))
+    private void onRender(GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         Minecraft mc = Minecraft.getInstance();
-        boolean creative = betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen());
+        boolean creative = betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen);
 
         // 创造模式：只绘制“不支持”提示，其余面板内容/按钮一律不画。
         BundlePanelRenderer.render(graphics,
@@ -42,13 +42,13 @@ public abstract class InventoryScreenMixin {
                 int sx = self.leftPos + slot.x;
                 int sy = self.topPos + slot.y;
                 var pose = graphics.pose();
-                pose.pushMatrix();
-                pose.translate(sx + 8, sy + 8);
+                pose.pushPose();
+                pose.translate(sx + 8, sy + 8, 0);
                 float scale = 19f / 16f;
-                pose.scale(scale, scale);
-                pose.translate(-8, -8);
-                graphics.item(slot.getItem(), 0, 0);
-                pose.popMatrix();
+                pose.scale(scale, scale, 1f);
+                pose.translate(-8, -8, 0);
+                graphics.renderItem(slot.getItem(), 0, 0);
+                pose.popPose();
             }
         }
 
@@ -60,11 +60,11 @@ public abstract class InventoryScreenMixin {
         }
     }
 
-    private static void renderToggleButton(GuiGraphicsExtractor graphics, int x, int y, int mouseX, int mouseY) {
+    private static void renderToggleButton(GuiGraphics graphics, int x, int y, int mouseX, int mouseY) {
         boolean hovered = mouseX >= x && mouseX < x + 20 && mouseY >= y && mouseY < y + 20;
         if (hovered) graphics.fill(x, y, x + 20, y + 20, 0x40FFFFFF);
         if (BundlePanelRenderer.visible) graphics.fill(x + 2, y + 17, x + 18, y + 18, 0xFF80B0FF);
         ItemStack icon = new ItemStack(Items.BUNDLE);
-        graphics.item(icon, x + 1, y + 2);
+        graphics.renderItem(icon, x + 1, y + 2);
     }
 }

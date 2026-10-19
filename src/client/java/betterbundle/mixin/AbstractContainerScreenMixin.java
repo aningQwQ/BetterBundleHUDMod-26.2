@@ -9,8 +9,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
@@ -38,13 +37,14 @@ public abstract class AbstractContainerScreenMixin {
     private EditBox betterbundle$searchField;
 
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
-    private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+    private void onMouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
+        int modifiers = Screen.hasShiftDown() ? GLFW.GLFW_MOD_SHIFT : 0;
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
 
         // 一键整理按钮（面板可见时优先；运行中点击即取消）
         if (BundlePanelRenderer.isEffectivelyVisible()
                 && SortButton.handleClick(self.leftPos, self.topPos, self.imageHeight,
-                        event.x(), event.y())) {
+                        mouseX, mouseY)) {
             cir.setReturnValue(true);
             return;
         }
@@ -53,25 +53,25 @@ public abstract class AbstractContainerScreenMixin {
         SortStateMachine.get().abortByUser();
 
         // 滚动条拖动：按下即抓取
-        if (BundlePanelInteraction.handleScrollbarClick(event.x(), event.y(),
+        if (BundlePanelInteraction.handleScrollbarClick(mouseX, mouseY,
                 self.leftPos, self.topPos, self.imageHeight)) {
             cir.setReturnValue(true);
             return;
         }
 
         // Bulk-insert: space+left anywhere starts the sweep.
-        if (event.button() == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
+        if (button == 0 && isSpaceDown() && BundlePanelRenderer.isEffectivelyVisible()) {
             BundlePanelInteraction.startBulkInsert();
             sweeping = true;
-            sweepLastX = event.x();
-            sweepLastY = event.y();
+            sweepLastX = mouseX;
+            sweepLastY = mouseY;
             sweptSlots.clear();
         }
 
         // Space+Click works on ALL container screens.
         // 用事件坐标定位槽位（与原生 getHoveredSlot 一致），不要用 hoveredSlot 字段：
         // 该字段只在 mouseMoved 里更新，单击可能先于本帧的移动事件到达而读到旧槽位。
-        Slot hovered = findSlotAt(self, event.x(), event.y());
+        Slot hovered = findSlotAt(self, mouseX, mouseY);
         if (hovered != null && hovered.hasItem()) {
             boolean handled = BundlePanelInteraction.handleSpaceClick(hovered);
             if (handled) {
@@ -81,8 +81,8 @@ public abstract class AbstractContainerScreenMixin {
             }
         }
 
-        double mx = event.x();
-        double my = event.y();
+        double mx = mouseX;
+        double my = mouseY;
 
         // For non-recipe-book screens: handle toggle, category, search bar
         if (!(((Object) this) instanceof AbstractRecipeBookScreen)) {
@@ -105,7 +105,7 @@ public abstract class AbstractContainerScreenMixin {
             }
 
             if (BundlePanelRenderer.isInsideSearchBar(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
-                BundlePanelRenderer.handleSearchClick(event, doubleClick, self.leftPos, self.topPos, self.imageHeight);
+                BundlePanelRenderer.handleSearchClick(mouseX, mouseY, button, self.leftPos, self.topPos, self.imageHeight);
                 this.betterbundle$searchField = BundlePanelRenderer.getSearchBox();
                 cir.setReturnValue(true);
                 return;
@@ -121,7 +121,7 @@ public abstract class AbstractContainerScreenMixin {
         if (!cursor.isEmpty() && isInsidePanelBounds(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
             BundleCategory cat = BundlePanelRenderer.getCategoryAt(mx, my, self.leftPos, self.topPos, self.imageHeight);
             if (cat == null) {
-                BundlePanelInteraction.handlePanelInsert(event.button());
+                BundlePanelInteraction.handlePanelInsert(button);
                 // 面板在容器 GUI 之外：无论能否塞入都必须吞掉点击。
                 // 否则未吞掉时会落到原版“点击 GUI 外”，把光标上的物品丢出。
                 cir.setReturnValue(true);
@@ -132,7 +132,7 @@ public abstract class AbstractContainerScreenMixin {
         if (BundlePanelInteraction.isInsidePanel(mx, my, self.leftPos, self.topPos, self.imageHeight)) {
             if (cursor.isEmpty()) {
                 boolean handled = BundlePanelInteraction.handlePanelClick(
-                        mx, my, event.button(), event.modifiers(), self.leftPos, self.topPos, self);
+                        mx, my, button, modifiers, self.leftPos, self.topPos, self);
                 if (handled) cir.setReturnValue(true);
             }
         }
@@ -143,7 +143,7 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     @Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
-    private void onMouseReleased(MouseButtonEvent event, CallbackInfoReturnable<Boolean> cir) {
+    private void onMouseReleased(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
         BundlePanelInteraction.stopBulkInsert();
         BundlePanelInteraction.stopScrollbarDrag();
         sweeping = false;
@@ -152,16 +152,16 @@ public abstract class AbstractContainerScreenMixin {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         // 面板整体在容器 GUI 之外：松开点若落在面板内（含空网格/空白）也必须吞掉，
         // 否则原版 mouseReleased 会按“点击 GUI 外(-999)”丢出光标物品。
-        if (isInsidePanelBounds(event.x(), event.y(), self.leftPos, self.topPos, self.imageHeight)) {
+        if (isInsidePanelBounds(mouseX, mouseY, self.leftPos, self.topPos, self.imageHeight)) {
             cir.setReturnValue(true);
         }
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
-    private void onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+    private void onKeyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
         if (BundlePanelRenderer.isSearchFocused()) {
-            BundlePanelRenderer.handleSearchKey(event);
+            BundlePanelRenderer.handleSearchKey(keyCode, scanCode, modifiers);
             cir.setReturnValue(true);
         }
     }
@@ -173,13 +173,13 @@ public abstract class AbstractContainerScreenMixin {
     private final Set<Integer> sweptSlots = new HashSet<>();
 
     @Inject(method = "mouseDragged", at = @At("HEAD"), cancellable = true)
-    private void onMouseDragged(MouseButtonEvent event, double dx, double dy,
+    private void onMouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY,
                                  CallbackInfoReturnable<Boolean> cir) {
         SortStateMachine.get().abortByUser();
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
 
         // 滚动条拖动优先
-        if (BundlePanelInteraction.handleScrollbarDrag(event.x(), event.y(),
+        if (BundlePanelInteraction.handleScrollbarDrag(mouseX, mouseY,
                 self.leftPos, self.topPos, self.imageHeight)) {
             cir.setReturnValue(true);
             return;
@@ -193,8 +193,8 @@ public abstract class AbstractContainerScreenMixin {
             return;
         }
 
-        double mx = event.x();
-        double my = event.y();
+        double mx = mouseX;
+        double my = mouseY;
         sweepEnqueue(self, sweepLastX, sweepLastY, mx, my);
         sweepLastX = mx;
         sweepLastY = my;
@@ -282,7 +282,7 @@ public abstract class AbstractContainerScreenMixin {
     }
 
     private static boolean isSpaceDown() {
-        long window = Minecraft.getInstance().getWindow().handle();
+        long window = Minecraft.getInstance().getWindow().getWindow();
         return GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
     }
 }

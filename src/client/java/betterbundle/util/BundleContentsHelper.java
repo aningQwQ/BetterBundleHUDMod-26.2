@@ -32,7 +32,7 @@ public final class BundleContentsHelper {
         BundleContents contents = getContents(bundleStack);
         Fraction currentWeight;
         if (contents != null) {
-            currentWeight = contents.weight().result().orElse(Fraction.ZERO);
+            currentWeight = contents.weight();
         } else {
             currentWeight = Fraction.ZERO; // empty/unused bundle
         }
@@ -45,7 +45,7 @@ public final class BundleContentsHelper {
     public static Fraction perItemWeight(ItemStack stack) {
         BundleContents contents = getContents(stack);
         if (contents != null) {
-            return contents.weight().result().orElse(Fraction.ZERO)
+            return contents.weight()
                     .add(Fraction.getFraction(1, 16));
         }
         int max = Math.max(1, stack.getMaxStackSize());
@@ -61,7 +61,7 @@ public final class BundleContentsHelper {
         try {
             BundleContents contents = getContents(bundleStack);
             Fraction current = contents != null
-                    ? contents.weight().result().orElse(Fraction.ZERO)
+                    ? contents.weight()
                     : Fraction.ZERO;
             Fraction free = Fraction.ONE.subtract(current);
             if (free.compareTo(Fraction.ZERO) <= 0) return 0;
