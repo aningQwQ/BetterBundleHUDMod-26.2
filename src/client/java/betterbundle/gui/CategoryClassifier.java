@@ -15,14 +15,12 @@ import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.BushBlock;
 import net.minecraft.world.level.block.CactusBlock;
-import net.minecraft.world.level.block.CactusFlowerBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.KelpBlock;
 import net.minecraft.world.level.block.KelpPlantBlock;
-import net.minecraft.world.level.block.LilyPadBlock;
+import net.minecraft.world.level.block.WaterlilyBlock;
 import net.minecraft.world.level.block.SeagrassBlock;
 import net.minecraft.world.level.block.SugarCaneBlock;
-import net.minecraft.world.level.block.VegetationBlock;
 import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.VoxelShape;
@@ -152,10 +150,10 @@ public final class CategoryClassifier {
         }
         if (state != null) {
             Block block = state.getBlock();
-            if (block instanceof VegetationBlock || block instanceof BushBlock
+            if (block instanceof BushBlock
                     || block instanceof CropBlock || block instanceof SugarCaneBlock
-                    || block instanceof CactusBlock || block instanceof CactusFlowerBlock
-                    || block instanceof VineBlock || block instanceof LilyPadBlock
+                    || block instanceof CactusBlock
+                    || block instanceof VineBlock || block instanceof WaterlilyBlock
                     || block instanceof KelpBlock || block instanceof KelpPlantBlock
                     || block instanceof SeagrassBlock) {
                 return true;
@@ -169,7 +167,7 @@ public final class CategoryClassifier {
 
     private static boolean isMineral(Item item, String path) {
         var holder = item.builtInRegistryHolder();
-        return holder.is(ItemTags.COALS) || holder.is(ItemTags.COPPER)
+        return holder.is(ItemTags.COALS)
                 || holder.is(ItemTags.COAL_ORES) || holder.is(ItemTags.IRON_ORES)
                 || holder.is(ItemTags.COPPER_ORES) || holder.is(ItemTags.GOLD_ORES)
                 || holder.is(ItemTags.REDSTONE_ORES) || holder.is(ItemTags.LAPIS_ORES)
@@ -179,7 +177,7 @@ public final class CategoryClassifier {
 
     private static boolean isToolOrEquipment(Item item, String path) {
         var holder = item.builtInRegistryHolder();
-        if (holder.is(ItemTags.SPEARS) || holder.is(ItemTags.SWORDS) || holder.is(ItemTags.AXES)
+        if (holder.is(ItemTags.SWORDS) || holder.is(ItemTags.AXES)
                 || holder.is(ItemTags.PICKAXES) || holder.is(ItemTags.HOES) || holder.is(ItemTags.SHOVELS)
                 || holder.is(ItemTags.ARROWS) || holder.is(ItemTags.HEAD_ARMOR)
                 || holder.is(ItemTags.CHEST_ARMOR) || holder.is(ItemTags.LEG_ARMOR)

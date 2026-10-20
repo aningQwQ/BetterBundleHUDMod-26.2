@@ -7,7 +7,7 @@ import betterbundle.sort.plan.BundlePacker;
 import betterbundle.sort.plan.PlanResult;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.entity.player.Player;
 
 /** 「一键整理」按钮 + 进度展示（无遮罩、不锁 UI）。位置由 {@link PanelLayout} 统一给出。 */
@@ -39,7 +39,7 @@ public final class SortButton {
         Player player = client.player;
         if (player == null) return true;
 
-        if (betterbundle.util.CreativeGuard.isCreative(player, client.gui.screen())) {
+        if (betterbundle.util.CreativeGuard.isCreative(player, client.screen)) {
             setError("创造模式暂不支持整理");
             return true;
         }
@@ -70,7 +70,7 @@ public final class SortButton {
         if (errorTicks > 0) errorTicks--;
     }
 
-    public static void render(GuiGraphicsExtractor graphics, Font font,
+    public static void render(GuiGraphics graphics, Font font,
                               int leftPos, int topPos, int imageHeight,
                               int mouseX, int mouseY) {
         PanelLayout lay = layout(leftPos, topPos, imageHeight);
@@ -100,7 +100,7 @@ public final class SortButton {
 
         int textW = font.width(label);
         int textColor = errorTicks > 0 ? 0xFFFF8080 : 0xFFFFFFFF;
-        graphics.text(font, label, x + Math.max(2, (w - textW) / 2),
+        graphics.drawString(font, label, x + Math.max(2, (w - textW) / 2),
                 y + (h - font.lineHeight) / 2 + 1, textColor, false);
     }
 }

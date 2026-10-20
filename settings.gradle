@@ -4,9 +4,21 @@ pluginManagement {
             name = 'Fabric'
             url = 'https://maven.fabricmc.net/'
         }
+        maven {
+            name = 'KikuGie Releases'
+            url = 'https://maven.kikugie.dev/releases'
+        }
+        maven {
+            name = 'KikuGie Snapshots'
+            url = 'https://maven.kikugie.dev/snapshots'
+        }
         mavenCentral()
         gradlePluginPortal()
     }
+}
+
+plugins {
+    id 'dev.kikugie.loom-back-compat' version '0.4.3'
 }
 
 rootProject.name = 'better-bundle'

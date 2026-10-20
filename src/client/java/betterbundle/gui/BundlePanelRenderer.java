@@ -6,7 +6,7 @@ import net.sourceforge.pinyin4j.format.HanyuPinyinOutputFormat;
 import net.sourceforge.pinyin4j.format.HanyuPinyinToneType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.input.CharacterEvent;
@@ -169,7 +169,7 @@ public final class BundlePanelRenderer {
 
     public static boolean isRecipeBookOpen() {
         Minecraft client = Minecraft.getInstance();
-        if (client.gui.screen() instanceof AbstractRecipeBookScreen<?> screen) return screen.recipeBookComponent.isVisible();
+        if (client.screen instanceof AbstractRecipeBookScreen<?> screen) return screen.recipeBookComponent.isVisible();
         return false;
     }
 
@@ -177,7 +177,7 @@ public final class BundlePanelRenderer {
     public static boolean isEffectivelyVisible() {
         // 创造背包界面：面板整体视为不可见（各交互分支都会因此自然跳过）。
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) return false;
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen)) return false;
         return visible && !isRecipeBookOpen();
     }
     public static void toggleVisible() {
@@ -298,18 +298,18 @@ public final class BundlePanelRenderer {
 
     // --- render ---
 
-    private static void border(GuiGraphicsExtractor g, int x, int y, int w, int h, int color) {
+    private static void border(GuiGraphics g, int x, int y, int w, int h, int color) {
         g.fill(x, y, x + w, y + 1, color);
         g.fill(x, y + h - 1, x + w, y + h, color);
         g.fill(x, y, x + 1, y + h, color);
         g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
-    public static void render(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight,
+    public static void render(GuiGraphics graphics, int leftPos, int topPos, int imageHeight,
                               int mouseX, int mouseY, float partialTick) {
         Minecraft mc = Minecraft.getInstance();
         // 创造模式：整个面板不绘制（仅开关打开时显示“不支持”）。
-        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.gui.screen())) {
+        if (betterbundle.util.CreativeGuard.isCreative(mc.player, mc.screen)) {
             unfocusSearch();
             if (visible) renderUnsupported(graphics, leftPos, topPos, imageHeight);
             return;
@@ -346,7 +346,7 @@ public final class BundlePanelRenderer {
                 graphics.fill(lay.catX, by, lay.catX + lay.catW, by + lay.catW, bg);
                 if (selected) border(graphics, lay.catX, by, lay.catW, lay.catW, 0x90FFFFFF);
                 int iconOff = (lay.catW - 16) / 2;
-                graphics.item(cats[i].getIcon(), lay.catX + iconOff, by + iconOff);
+                graphics.renderItem(cats[i].getIcon(), lay.catX + iconOff, by + iconOff);
             }
         }
 
@@ -371,8 +371,8 @@ public final class BundlePanelRenderer {
                 graphics.fill(sx + 1, sy + 1, sx + PanelLayout.SLOT - 1, sy + PanelLayout.SLOT - 1, 0x50FFFFFF);
 
                 FlatItem fi = items.get(flatIndex);
-                graphics.item(fi.stack(), sx + 1, sy + 1);
-                graphics.itemDecorations(font, fi.stack(), sx + 1, sy + 1);
+                graphics.renderItem(fi.stack(), sx + 1, sy + 1);
+                graphics.renderItemDecorations(font, fi.stack(), sx + 1, sy + 1);
 
                 if (mouseX >= sx && mouseX < sx + PanelLayout.SLOT
                         && mouseY >= sy && mouseY < sy + PanelLayout.SLOT) {
@@ -396,12 +396,12 @@ public final class BundlePanelRenderer {
         // 搜索栏：原版 EditBox（仅 ALL 模式可见）；非 ALL 在同行显示分类标题
         if (isAllMode) {
             layoutSearchBox(lay, true);
-            searchBox().extractWidgetRenderState(graphics, mouseX, mouseY, partialTick);
+            searchBox().render(graphics, mouseX, mouseY, partialTick);
         } else {
             layoutSearchBox(lay, false);
             String label = currentCategory.getDisplayName();
             int catTextY = lay.searchY + (lay.searchH - font.lineHeight) / 2;
-            graphics.text(font, label, lay.searchX + 3, catTextY, 0xFFCCCCCC, false);
+            graphics.drawString(font, label, lay.searchX + 3, catTextY, 0xFFCCCCCC, false);
         }
 
         // 容量显示（网格下方右对齐）
@@ -410,10 +410,10 @@ public final class BundlePanelRenderer {
         int textW = font.width(countText);
         int countX = lay.gridX + lay.gridW - textW;
         graphics.fill(countX - 2, lay.countY, countX + textW + 2, lay.countY + font.lineHeight, 0x30FFFFFF);
-        graphics.text(font, countText, countX, lay.countY, 0xFFAAAAAA, false);
+        graphics.drawString(font, countText, countX, lay.countY, 0xFFAAAAAA, false);
     }
 
-    private static void renderUnsupported(GuiGraphicsExtractor graphics, int leftPos, int topPos, int imageHeight) {
+    private static void renderUnsupported(GuiGraphics graphics, int leftPos, int topPos, int imageHeight) {
         Font font = Minecraft.getInstance().font;
         PanelLayout lay = PanelLayout.compute(leftPos, topPos, imageHeight, 0, true, 0, font.lineHeight,
                 ModConfig.get().showCategoryBar);
@@ -422,7 +422,7 @@ public final class BundlePanelRenderer {
         String msg = "创造模式不支持此功能";
         int tx = lay.panelX + (lay.panelW - font.width(msg)) / 2;
         int ty = lay.panelY + lay.panelH / 2;
-        graphics.text(font, msg, tx, ty, 0xFFFF8080, false);
+        graphics.drawString(font, msg, tx, ty, 0xFFFF8080, false);
     }
 
     private static int[] getBundleStats() {
@@ -434,7 +434,7 @@ public final class BundlePanelRenderer {
         for (BundleSlotEntry entry : all) {
             BundleContents c = entry.contents();
             if (c != null && !c.isEmpty()) {
-                Fraction w = c.weight().result().orElse(Fraction.ZERO);
+                Fraction w = c.weight();
                 used += w.multiplyBy(Fraction.getFraction(64, 1)).intValue();
             }
         }

@@ -10,7 +10,7 @@ import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundSelectBundleItemPacket;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.BundleContents;
@@ -100,6 +100,6 @@ public final class BundlePacketSender {
     private static ServerboundContainerClickPacket click(int containerId, int slot, byte button) {
         return new ServerboundContainerClickPacket(
                 containerId, -1, (short) slot, button,
-                ContainerInput.PICKUP, new Int2ObjectOpenHashMap<>(), HashedStack.EMPTY);
+                ClickType.PICKUP, new Int2ObjectOpenHashMap<>(), HashedStack.EMPTY);
     }
 }

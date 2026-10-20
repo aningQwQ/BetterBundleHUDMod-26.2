@@ -34,7 +34,7 @@ public final class ItemWeights {
         if (stack == null || stack.isEmpty()) return 0;
         BundleContents contents = stack.get(DataComponents.BUNDLE_CONTENTS);
         if (contents != null) {
-            int inner = unitsFromFraction(contents.weight().result().orElse(Fraction.ZERO));
+            int inner = unitsFromFraction(contents.weight());
             return inner + SortConfig.NESTED_BUNDLE_WEIGHT;
         }
         int max = Math.max(1, stack.getMaxStackSize());
@@ -44,7 +44,7 @@ public final class ItemWeights {
     /** 一个袋子的总内容重量（0..64）。 */
     public static int contentsWeight(BundleContents contents) {
         if (contents == null) return 0;
-        return unitsFromFraction(contents.weight().result().orElse(Fraction.ZERO));
+        return unitsFromFraction(contents.weight());
     }
 
     private static int unitsFromFraction(Fraction fraction) {
