@@ -189,9 +189,15 @@ public final class BundlePanelInteraction {
     }
 
     private static ServerboundContainerClickPacket makeClickPacket(Player player, int containerId, int slot, byte button) {
+        //? if >=1.21.5 {
+        /*return new ServerboundContainerClickPacket(
+                containerId, player.containerMenu.getStateId(), (short) slot, button,
+                ClickType.PICKUP, new Int2ObjectOpenHashMap<>(), net.minecraft.network.HashedStack.EMPTY);
+        *///?} else {
         return new ServerboundContainerClickPacket(
                 containerId, player.containerMenu.getStateId(), slot, button,
                 ClickType.PICKUP, ItemStack.EMPTY, new Int2ObjectOpenHashMap<>());
+        //?}
     }
 
     private static int findEmptyPlayerSlot(Player player) {
