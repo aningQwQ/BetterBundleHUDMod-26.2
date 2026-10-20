@@ -1,14 +1,11 @@
 package betterbundle.gui;
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import betterbundle.util.ContainerClicks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.network.HashedStack;
-import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundSelectBundleItemPacket;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
@@ -91,13 +88,13 @@ public final class BundlePanelInteraction {
             // 绝不能循环右键（光标非空后右键会走原版逻辑，把袋子本身拿起来）。
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
-            connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
-            connection.send(makeClickPacket(containerId, destSlot, (byte) 0));
+            ContainerClicks.pickup(containerId, bundleSlot, 1);
+            ContainerClicks.pickup(containerId, destSlot, 0);
         } else {
             // 选中是 toggle 语义：先 -1 再设索引，保证确定选中。
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, -1));
             connection.send(new ServerboundSelectBundleItemPacket(bundleSlot, clicked.itemIndex()));
-            connection.send(makeClickPacket(containerId, bundleSlot, (byte) 1));
+            ContainerClicks.pickup(containerId, bundleSlot, 1);
         }
 
         return true;
@@ -187,12 +184,6 @@ public final class BundlePanelInteraction {
             if (remaining <= 0) break;
         }
         return targets;
-    }
-
-    private static ServerboundContainerClickPacket makeClickPacket(int containerId, int slot, byte button) {
-        return new ServerboundContainerClickPacket(
-                containerId, -1, (short) slot, button,
-                ContainerInput.PICKUP, new Int2ObjectOpenHashMap<>(), HashedStack.EMPTY);
     }
 
     private static int findEmptyPlayerSlot(Player player) {
@@ -299,7 +290,7 @@ public final class BundlePanelInteraction {
         bulkSrcSlot = slotIndex;
         bulkSrcBefore = stackSignature(stack);
         bulkRecoverySent = false;
-        connection.send(makeClickPacket(player.containerMenu.containerId, slotIndex, (byte) 0));
+        ContainerClicks.pickup(player.containerMenu.containerId, slotIndex, 0);
         bulkPhase = BulkPhase.WAIT_PICKUP;
         bulkWaitTicks = 0;
         return true;
@@ -335,7 +326,7 @@ public final class BundlePanelInteraction {
             // 光标长时间未清空：兜底把光标物品点回源槽（避免滞留），只跳过当前格，保留队列。
             ClientPacketListener connection = client.getConnection();
             if (!bulkRecoverySent && connection != null) {
-                connection.send(makeClickPacket(player.containerMenu.containerId, bulkSrcSlot, (byte) 0));
+                ContainerClicks.pickup(player.containerMenu.containerId, bulkSrcSlot, 0);
                 bulkRecoverySent = true;
                 bulkWaitTicks = 0;
                 return;
@@ -360,11 +351,11 @@ public final class BundlePanelInteraction {
             int cap = BundleContentsHelper.maxAcceptable(stackAt(player, target), carried);
             if (cap <= 0) continue;
             remaining -= Math.min(cap, remaining);
-            connection.send(makeClickPacket(containerId, target, (byte) 0));
+            ContainerClicks.pickup(containerId, target, 0);
         }
         // 余量点回源槽：全部放入时光标为空且源槽为空，是无害 no-op；
         // 有空余量时把余量放回。绝不在此前空光标点过袋子槽。
-        connection.send(makeClickPacket(containerId, bulkSrcSlot, (byte) 0));
+        ContainerClicks.pickup(containerId, bulkSrcSlot, 0);
 
         bulkPhase = BulkPhase.WAIT_INSERT;
         bulkWaitTicks = 0;
@@ -435,7 +426,7 @@ public final class BundlePanelInteraction {
             int cap = BundleContentsHelper.maxAcceptable(stackAt(player, target), cursor);
             if (cap <= 0) continue;
             predicted -= Math.min(cap, predicted);
-            connection.send(makeClickPacket(containerId, target, (byte) 0));
+            ContainerClicks.pickup(containerId, target, 0);
         }
         return true;
     }
