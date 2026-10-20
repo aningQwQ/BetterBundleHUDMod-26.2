@@ -27,3 +27,6 @@ crash-reports/
 *.zip
 *.txt
 !LICENSE
+
+# IDE
+.trae/
