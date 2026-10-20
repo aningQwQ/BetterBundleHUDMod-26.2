@@ -18,7 +18,15 @@ pluginManagement {
 }
 
 plugins {
+    id 'dev.kikugie.stonecutter' version '0.9.8'
     id 'dev.kikugie.loom-back-compat' version '0.4.3'
+}
+
+stonecutter {
+    create(rootProject) {
+        versions '1.21.9', '1.21.10', '1.21.11'
+        vcsVersion = '1.21.9'
+    }
 }
 
 rootProject.name = 'better-bundle'
