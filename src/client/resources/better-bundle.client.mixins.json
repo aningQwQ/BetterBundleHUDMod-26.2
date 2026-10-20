@@ -6,7 +6,7 @@
         "InventoryScreenMixin",
         "AbstractContainerScreenMixin",
         "AbstractRecipeBookScreenMixin",
-        "GuiEventListenerMixin"
+        "ContainerEventHandlerMixin"
     ],
     "injectors": {
         "defaultRequire": 1
