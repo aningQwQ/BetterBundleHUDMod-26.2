@@ -383,7 +383,11 @@ public final class BundlePanelRenderer {
             int hx = lay.slotX(hCol);
             int hy = lay.slotY(hRow);
             graphics.fill(hx, hy, hx + PanelLayout.SLOT, hy + PanelLayout.SLOT, 0x60FFFFFF);
+            //? if >=1.21.6 {
+            /*graphics.setTooltipForNextFrame(font, items.get(hoveredFlatIndex).stack(), mouseX, mouseY);
+            *///?} else {
             graphics.renderTooltip(font, items.get(hoveredFlatIndex).stack(), mouseX, mouseY);
+            //?}
             hoveredBundleSlot = items.get(hoveredFlatIndex).bundleSlot();
         } else {
             hoveredBundleSlot = -1;

@@ -16,7 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AbstractContainerScreen.class)
 public abstract class InventoryScreenMixin {
 
+    //? if >=1.21.6 {
+    /*@Inject(method = "renderContents", at = @At("TAIL"))
+    *///?} else {
     @Inject(method = "render", at = @At("TAIL"))
+    //?}
     private void onRender(GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         AbstractContainerScreen<?> self = (AbstractContainerScreen<?>) (Object) this;
         Minecraft mc = Minecraft.getInstance();
@@ -42,6 +46,15 @@ public abstract class InventoryScreenMixin {
                 int sx = self.leftPos + slot.x;
                 int sy = self.topPos + slot.y;
                 var pose = graphics.pose();
+                //? if >=1.21.6 {
+                /*pose.pushMatrix();
+                pose.translate(sx + 8, sy + 8);
+                float scale = 19f / 16f;
+                pose.scale(scale, scale);
+                pose.translate(-8, -8);
+                graphics.renderItem(slot.getItem(), 0, 0);
+                pose.popMatrix();
+                *///?} else {
                 pose.pushPose();
                 pose.translate(sx + 8, sy + 8, 0);
                 float scale = 19f / 16f;
@@ -49,6 +62,7 @@ public abstract class InventoryScreenMixin {
                 pose.translate(-8, -8, 0);
                 graphics.renderItem(slot.getItem(), 0, 0);
                 pose.popPose();
+                //?}
             }
         }
 
